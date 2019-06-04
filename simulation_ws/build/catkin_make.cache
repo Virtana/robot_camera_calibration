@@ -1,0 +1,2 @@
+
+-DCATKIN_DEVEL_PREFIX=/home/chris/Desktop/robot_camera_calibration/simulation_ws/devel -DCMAKE_INSTALL_PREFIX=/home/chris/Desktop/robot_camera_calibration/simulation_ws/install -G Unix Makefiles

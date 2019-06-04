@@ -1,0 +1,2 @@
+- setup-file:
+    local-name: /home/chris/Desktop/robot_camera_calibration/simulation_ws/devel/setup.sh
