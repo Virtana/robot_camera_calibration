@@ -69,12 +69,14 @@ namespace rviz_simulator
 
         this->int_marker.name = this->name;
         this->int_marker.description = "6DOF_MOVE_ROTATE_3D";
+
+        // insert box with controls
+        this->makeBoxControl( int_marker );
         this->int_marker.controls[0].interaction_mode = visualization_msgs::InteractiveMarkerControl::MOVE_ROTATE_3D;
         visualization_msgs::InteractiveMarkerControl control;
         // marker axis not fixed
 
-        // insert box with controls
-        this->makeBoxControl( int_marker );
+        
 
         // set controls
         control.orientation.w = 1;
