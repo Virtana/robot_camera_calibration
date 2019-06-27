@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8.3)
 project(real_preprocessing)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
-# add_compile_options(-std=c++11)
+add_compile_options(-std=c++11)
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
@@ -10,7 +10,12 @@ project(real_preprocessing)
 find_package(catkin REQUIRED COMPONENTS
   roscpp
   std_msgs
+  apriltag_ros
+  cv_bridge
+  tf_conversions
 )
+
+find_package(OpenCV REQUIRED PATHS "~/Desktop/OpenCV")
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
@@ -104,7 +109,12 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES real_preprocessing
-#  CATKIN_DEPENDS roscpp std_msgs
+ CATKIN_DEPENDS 
+  roscpp
+  std_msgs
+  apriltag_ros
+  cv_bridge
+  tf_conversions
 #  DEPENDS system_lib
 )
 
@@ -117,6 +127,8 @@ catkin_package(
 include_directories(
 # include
   ${catkin_INCLUDE_DIRS}
+  ${OpenCV_INCLUDE_DIRS}
+  ${Eigen_INCLUDE_DIRS}
 )
 
 ## Declare a C++ library
@@ -132,7 +144,7 @@ include_directories(
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
-# add_executable(${PROJECT_NAME}_node src/real_preprocessing_node.cpp)
+add_executable(corner_detection_node src/corner_detection.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -143,11 +155,13 @@ include_directories(
 ## Add cmake target dependencies of the executable
 ## same as for the library above
 # add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+add_dependencies(corner_detection_node corner_detection_generate_messages_cpp)
 
 ## Specify libraries to link a library or executable target against
-# target_link_libraries(${PROJECT_NAME}_node
-#   ${catkin_LIBRARIES}
-# )
+ target_link_libraries(corner_detection_node
+   ${catkin_LIBRARIES}
+   ${OpenCV_LIBRARIES}
+ )
 
 #############
 ## Install ##
@@ -155,6 +169,13 @@ include_directories(
 
 # all install targets should use catkin DESTINATION variables
 # See http://ros.org/doc/api/catkin/html/adv_user_guide/variables.html
+
+install(TARGETS
+  ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
+
 
 ## Mark executable scripts (Python etc.) for installation
 ## in contrast to setup.py, you can choose the destination
@@ -196,3 +217,8 @@ include_directories(
 
 ## Add folders to be run by python nosetests
 # catkin_add_nosetests(test)
+
+#install(DIRECTORY include/elroy_2dnav/
+#DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
+#)
+
