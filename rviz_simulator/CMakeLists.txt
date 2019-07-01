@@ -1,20 +1,21 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(rviz_simulator)
-
-## Compile as C++11, supported in ROS Kinetic and newer
-# add_compile_options(-std=c++11)
+set (CMAKE_CXX_STANDARD 11)
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
   roscpp
+  rosconsole
   std_msgs
   visualization_msgs
+  interactive_markers
+  
 )
 
 ## System dependencies are found with CMake's conventions
-# find_package(Boost REQUIRED COMPONENTS system)
+find_package(Boost REQUIRED COMPONENTS system)
 
 
 ## Uncomment this if the package has a setup.py. This macro ensures
@@ -103,10 +104,10 @@ find_package(catkin REQUIRED COMPONENTS
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
-#  INCLUDE_DIRS include
-#  LIBRARIES rviz_simulator
-#  CATKIN_DEPENDS roscpp std_msgs visualization_msgs
-#  DEPENDS system_lib
+  INCLUDE_DIRS include
+  LIBRARIES rviz_simulator
+  CATKIN_DEPENDS roscpp std_msgs visualization_msgs interactive_markers
+  # DEPENDS system_lib
 )
 
 ###########
@@ -115,15 +116,11 @@ catkin_package(
 
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
-include_directories(
-# include
-  ${catkin_INCLUDE_DIRS}
+include_directories(include  
+  ${catkin_INCLUDE_DIRS} 
+  ${boost_INCLUDE_DIRS}
 )
 
-## Declare a C++ library
-# add_library(${PROJECT_NAME}
-#   src/${PROJECT_NAME}/rviz_simulator.cpp
-# )
 
 ## Add cmake target dependencies of the library
 ## as an example, code may need to be generated before libraries
@@ -146,9 +143,45 @@ include_directories(
 # add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Specify libraries to link a library or executable target against
-# target_link_libraries(${PROJECT_NAME}_node
-#   ${catkin_LIBRARIES}
-# )
+## target_link_libraries(${PROJECT_NAME}_node
+##   ${catkin_LIBRARIES}
+## )
+
+ ## target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES})
+
+
+#############
+## Testing ##
+#############
+
+## Add gtest based cpp test target and link libraries
+# catkin_add_gtest(${PROJECT_NAME}-test test/test_rviz_simulator.cpp)
+# if(TARGET ${PROJECT_NAME}-test)
+#   target_link_libraries(${PROJECT_NAME}-test ${PROJECT_NAME})
+# endif()
+
+## Add folders to be run by python nosetests
+# catkin_add_nosetests(test)
+## add_executable(one_marker src/one_marker.cpp)
+## target_link_libraries(one_marker ${catkin_LIBRARIES})
+
+add_executable(simulate 
+  src/simulate.cpp  
+)
+
+## Declare a C++ library
+add_library(${PROJECT_NAME}
+  src/simulate.cpp
+  src/target.cpp
+)
+
+target_link_libraries(simulate 
+  ${catkin_LIBRARIES} 
+  ${PROJECT_NAME} 
+  ${boost_LIBRARIES}
+)
+
+# add_dependencies()
 
 #############
 ## Install ##
@@ -165,18 +198,18 @@ include_directories(
 # )
 
 ## Mark executables and/or libraries for installation
-# install(TARGETS ${PROJECT_NAME} ${PROJECT_NAME}_node
-#   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-#   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-#   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
-# )
+ install(TARGETS ${PROJECT_NAME} 
+   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+ )
 
 ## Mark cpp header files for installation
-# install(DIRECTORY include/${PROJECT_NAME}/
-#   DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
+ install(DIRECTORY include/${PROJECT_NAME}/
+   DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
 #   FILES_MATCHING PATTERN "*.h"
 #   PATTERN ".svn" EXCLUDE
-# )
+ )
 
 ## Mark other files for installation (e.g. launch and bag files, etc.)
 # install(FILES
@@ -184,16 +217,3 @@ include_directories(
 #   # myfile2
 #   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 # )
-
-#############
-## Testing ##
-#############
-
-## Add gtest based cpp test target and link libraries
-# catkin_add_gtest(${PROJECT_NAME}-test test/test_rviz_simulator.cpp)
-# if(TARGET ${PROJECT_NAME}-test)
-#   target_link_libraries(${PROJECT_NAME}-test ${PROJECT_NAME})
-# endif()
-
-## Add folders to be run by python nosetests
-# catkin_add_nosetests(test)
