@@ -5,7 +5,7 @@
 #include "fstream"
 #include "string"
 
-void april_detection(const apriltag_ros::AprilTagDetectionArray::ConstPtr& msg)
+void aprilDetection(const apriltag_ros::AprilTagDetectionArray::ConstPtr& msg)
 {
   Eigen::MatrixXd intrinsic(3, 3);  // potential calibration function
   intrinsic << 630.3467672874693, 0, 314.10832937485145, 0, 624.9044125522948, 241.59156511756711, 0, 0, 1;
