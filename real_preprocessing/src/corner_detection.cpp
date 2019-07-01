@@ -5,6 +5,7 @@
 #include "fstream"
 #include "string"
 
+
 void aprilDetection(const apriltag_ros::AprilTagDetectionArray::ConstPtr& msg)
 {
   Eigen::MatrixXd intrinsic(3, 3);  // potential calibration function
@@ -84,7 +85,7 @@ int main(int argc, char** argv)
 {
   ros::init(argc, argv, "corner_detection");
   ros::NodeHandle nh;
-  ros::Subscriber sub = nh.subscribe("tag_detections", 10, april_detection);
+  ros::Subscriber sub = nh.subscribe("tag_detections", 10, aprilDetection);
   ros::spin();
   return 0;
 }
