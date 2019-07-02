@@ -26,7 +26,7 @@ Must also include OpenCV and Eigen directories. Mimic ->
 	  ${Eigen_INCLUDE_DIRS}
 	)
 
-OpenCV was installed on Ubuntu 16.04 using (https://www.learnopencv.com/install-opencv-3-4-4-on-ubuntu-16-04/) and included in CMakeLists.txt as follows.
+OpenCV was installed on Ubuntu 16.04 using (https://www.learnopencv.com/install-opencv-3-4-4-on-ubuntu-16-04/) and included in CMakeLists.txt as follows
 
 	find_package(find_package(OpenCV REQUIRED PATHS "YOUR-FOLDER-PATH")
 
@@ -41,6 +41,8 @@ Steps:
 	2.  Separate terminal $ rosrun cv_camera cv_camera (Runs camera driver)
 	3.  Separate terminal $ roslaunch apriltag_ros continuous_detection.launch camera_name:=/cv_camera image_topic:=image_raw (Runs video stream detection with manual remapping of camera driver to detection node )
 	4.  Separate terminal $ rosrun real_preprocessing corner_detection (Dumps YAML to path where this is run)
+
+
 
 
  
