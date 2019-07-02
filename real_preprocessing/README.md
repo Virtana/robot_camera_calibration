@@ -19,4 +19,4 @@ The package requires calibration of the camera to be used. This was done using [
 	1.  $ roscore 
 	2.  $ rosrun cv_camera cv_camera 
 	3.  $ roslaunch apriltag_ros continuous_detection.launch camera_name:=/cv_camera image_topic:=image_raw 
-	4.  $ rosrun real_preprocessing corner_detection 
+	4.  $ rosrun real_preprocessing corner_detection.cpp 
