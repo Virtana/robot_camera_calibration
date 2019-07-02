@@ -2,9 +2,9 @@
 
 ### Additional packages  
 
-* [apriltag\_ros] (http://wiki.ros.org/apriltag_ros)
-* [cv\_bridge] (http://wiki.ros.org/cv_bridge)
-* [tf\_conversions] (http://wiki.ros.org/tf_conversions)
+* [apriltag\_ros](http://wiki.ros.org/apriltag_ros)
+* [cv\_bridge](http://wiki.ros.org/cv_bridge)
+* [tf\_conversions](http://wiki.ros.org/tf_conversions)
 
 [OpenCV](https://www.learnopencv.com/install-opencv-3-4-4-on-ubuntu-16-04/) was installed on Ubuntu 16.04 and included in CMakeLists.txt as follows
 
