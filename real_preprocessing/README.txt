@@ -4,7 +4,7 @@ Additional packages required for real_preprocessing:
 	cv_bridge (http://wiki.ros.org/cv_bridge)
 	tf_conversions (http://wiki.ros.org/tf_conversions)
 
-To be included  in package.xml as dependencies and CMakelists.txt.
+Must be included  in package.xml as dependencies and CMakelists.txt.
 
 In package.xml, the following must be included for each package. (Dependency declaration depends on DISTRO!) 
 Kinetic uses:
