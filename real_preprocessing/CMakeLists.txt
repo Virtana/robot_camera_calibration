@@ -15,7 +15,7 @@ find_package(catkin REQUIRED COMPONENTS
   tf_conversions
 )
 
-find_package(OpenCV REQUIRED PATHS "~/Desktop/OpenCV")
+find_package(OpenCV REQUIRED PATHS "~/Documents/OpenCV")
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
@@ -145,6 +145,7 @@ include_directories(
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
 add_executable(corner_detection_node src/corner_detection.cpp)
+add_executable(camera_pose_node src/camera_pose.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -156,9 +157,16 @@ add_executable(corner_detection_node src/corner_detection.cpp)
 ## same as for the library above
 # add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 add_dependencies(corner_detection_node corner_detection_generate_messages_cpp)
+add_dependencies(camera_pose_node camera_pose_generate_messages_cpp)
 
 ## Specify libraries to link a library or executable target against
  target_link_libraries(corner_detection_node
+   ${catkin_LIBRARIES}
+   ${OpenCV_LIBRARIES}
+ )
+
+ target_link_libraries(camera_pose_node	
+   yaml-cpp
    ${catkin_LIBRARIES}
    ${OpenCV_LIBRARIES}
  )
