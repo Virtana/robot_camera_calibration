@@ -32,10 +32,8 @@
 #ifndef RVIZ_SIMULATOR_CAMERA_H
 #define RVIZ_SIMULATOR_CAMERA_H
 
-// #include <tf/tf.h>
 #include <tf_conversions/tf_eigen.h>
 #include <Eigen/Dense>
-// #include "tf/transform_datatypes.h"
 #include <eigen_conversions/eigen_msg.h>
 #include "yaml-cpp/yaml.h"
 #include <fstream>
@@ -48,8 +46,6 @@
 #include <ros/package.h>
 
 #include "rviz_simulator/target.h"
-
-// #include <tf/tf_eigen.h>
 
 namespace rviz_simulator
 {

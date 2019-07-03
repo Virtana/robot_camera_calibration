@@ -9,8 +9,12 @@ The `rviz_simulator` is an interactive 3D environment built using RViz and Inter
 
 ## Installation Instructions
 Requires ROS Kinectic Kane.  
+
 Clone the repo in the `src` folder of your catkin workspace.
-Run `catkin_make` in the root of your workspace to build the `rviz_simulator` package.
+Run `catkin_make` in the root of your workspace to build the `rviz_simulator` package.  
+
+If `yaml.cpp` does not work then install it from [here](https://github.com/jbeder/yaml-cpp)
+
 
 ## Execution Instructions
 Edit the `initialize_simulator.yaml` file to change the simulator configuration.
