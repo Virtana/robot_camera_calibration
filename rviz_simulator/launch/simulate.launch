@@ -1,0 +1,8 @@
+<launch>
+  <rosparam command="load" file="$(find rviz_simulator)/config/initialize_simulator.yaml" />
+  <rosparam command="load" file="$(find rviz_simulator)/config/realsense_camera_intrinsics.yaml" />
+  <node pkg="rviz" type="rviz" name="rviz"/>
+  <node pkg="rqt_console" type="rqt_console" name="rqt_console"/>
+  <node pkg="rqt_logger_level" type="rqt_logger_level" name="rqt_logger_level"/>
+  <node pkg="rviz_simulator" type="simulate" name="simulate"/>
+</launch>

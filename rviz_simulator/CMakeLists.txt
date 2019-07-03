@@ -11,11 +11,16 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
   visualization_msgs
   interactive_markers
-  
+  eigen_conversions
+  tf_conversions
+  tf
+  roslib
 )
 
 ## System dependencies are found with CMake's conventions
 find_package(Boost REQUIRED COMPONENTS system)
+# find_package(Eigen REQUIRED)
+# find_package(cmake_modules REQUIRED)
 
 
 ## Uncomment this if the package has a setup.py. This macro ensures
@@ -106,7 +111,7 @@ find_package(Boost REQUIRED COMPONENTS system)
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES rviz_simulator
-  CATKIN_DEPENDS roscpp std_msgs visualization_msgs interactive_markers
+  CATKIN_DEPENDS roscpp std_msgs visualization_msgs interactive_markers roslib
   # DEPENDS system_lib
 )
 
@@ -119,6 +124,7 @@ catkin_package(
 include_directories(include  
   ${catkin_INCLUDE_DIRS} 
   ${boost_INCLUDE_DIRS}
+  ${Eigen_INCLUDE_DIRS}
 )
 
 
@@ -150,6 +156,7 @@ include_directories(include
  ## target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES})
 
 
+
 #############
 ## Testing ##
 #############
@@ -172,13 +179,19 @@ add_executable(simulate
 ## Declare a C++ library
 add_library(${PROJECT_NAME}
   src/simulate.cpp
+  src/camera.cpp
   src/target.cpp
+  
+
+)
+
+target_link_libraries(${PROJECT_NAME} 
+  ${catkin_LIBRARIES} 
+  ${boost_LIBRARIES}
 )
 
 target_link_libraries(simulate 
-  ${catkin_LIBRARIES} 
-  ${PROJECT_NAME} 
-  ${boost_LIBRARIES}
+  ${PROJECT_NAME} yaml-cpp
 )
 
 # add_dependencies()

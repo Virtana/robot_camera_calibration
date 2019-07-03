@@ -1,0 +1,21 @@
+world_frame_id: "ROSWorld"
+
+# target parameters
+
+# colors to be decoded as std_msgs::ColorRGBA 
+# stored in yaml as [red, green, blue, alpha]
+grey: [0.5, 0.5, 0.5, 1.0]
+blue: [0.0, 0.67, 0.9, 1.0]
+orange: [1.0, 0.39, 0.12, 1.0]
+
+num_targets_in_line: 5
+distance_between_targets: 1.0
+starting_target_position: [0.0, 0.0, 0.0]   # geometery_msgs::Point
+starting_target_orientation: [0, 0, 0, 1]   # geometry_msgs::Quaternion
+target_scale: 0.1
+
+# camera parameters
+camera_intrinsics_file: "realsense_camera_intrinsics.yaml" 
+starting_camera_positon: [0, 3, 0 ]   # geometery_msgs::Point
+starting_camera_orientation: [0, -0.7071068, 0.7071068, 0]  # geometry_msgs::Quaternion (roll 90, yaw 180)
+camera_scale: 0.2

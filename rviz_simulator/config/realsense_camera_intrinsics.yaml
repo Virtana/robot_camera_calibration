@@ -1,0 +1,20 @@
+name: "Realsense Camera (Camera)"
+
+width: 1280
+height: 720
+fx: 468.456
+fy: 468.456
+cx: 320
+cy: 240
+near_clip: 0.1
+far_clip: 5.0
+
+# distortions
+k1: 0.0
+k2: 0.0
+k3: 0.0
+k4: 0.0
+k5: 0.0
+k6: 0.0
+p1: 0.0
+p2: 0.0
