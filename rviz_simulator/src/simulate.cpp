@@ -33,7 +33,7 @@
  *  make wall
  *  make room
  *  publish transforms to yaml
- *  neaten up includes, cmake, packages 
+ *  neaten up includes, cmake, packages
  *  UML diagram
  *  Error checking and exception handling
  */
@@ -47,7 +47,7 @@
 boost::shared_ptr<interactive_markers::InteractiveMarkerServer> g_interactive_marker_server;
 
 /// Loads std_msgs::ColorRGBA from ROS parameter server
-std_msgs::ColorRGBA loadColor(const ros::NodeHandle &n, const std::string &color_name)
+std_msgs::ColorRGBA loadColor(const ros::NodeHandle& n, const std::string& color_name)
 {
   std::vector<double> color_vector;
   n.getParam(color_name, color_vector);
@@ -60,7 +60,7 @@ std_msgs::ColorRGBA loadColor(const ros::NodeHandle &n, const std::string &color
 }
 
 /// Loads geometry_msgs::Point from ROS parameter server
-geometry_msgs::Point loadPoint(const ros::NodeHandle &n, const std::string &point_name)
+geometry_msgs::Point loadPoint(const ros::NodeHandle& n, const std::string& point_name)
 {
   std::vector<double> point_vector;
   n.getParam(point_name, point_vector);
@@ -72,7 +72,7 @@ geometry_msgs::Point loadPoint(const ros::NodeHandle &n, const std::string &poin
 }
 
 /// Loads geometry_msgs::Quaternion from ROS parameter server
-geometry_msgs::Quaternion loadOrientation(const ros::NodeHandle &n, const std::string &quarternion_name)
+geometry_msgs::Quaternion loadOrientation(const ros::NodeHandle& n, const std::string& quarternion_name)
 {
   std::vector<double> quaternion_vector;
   n.getParam(quarternion_name, quaternion_vector);
@@ -85,7 +85,7 @@ geometry_msgs::Quaternion loadOrientation(const ros::NodeHandle &n, const std::s
 }
 
 /// Loads rviz_simulator::CameraIntrinsics from ROS parameter server
-rviz_simulator::CameraIntrinsics loadCameraIntrinsics(const ros::NodeHandle &n)
+rviz_simulator::CameraIntrinsics loadCameraIntrinsics(const ros::NodeHandle& n)
 {
   rviz_simulator::CameraIntrinsics intrinsics;
   n.getParam("width", intrinsics.image_width);
@@ -100,7 +100,7 @@ rviz_simulator::CameraIntrinsics loadCameraIntrinsics(const ros::NodeHandle &n)
 }
 
 /// Loads rviz_simulator::CameraDistortions from ROS parameter server
-rviz_simulator::CameraDistortions loadCameraDistortions(const ros::NodeHandle &n)
+rviz_simulator::CameraDistortions loadCameraDistortions(const ros::NodeHandle& n)
 {
   rviz_simulator::CameraDistortions distortions;
   n.getParam("k1", distortions.k1);
@@ -111,27 +111,30 @@ rviz_simulator::CameraDistortions loadCameraDistortions(const ros::NodeHandle &n
   n.getParam("k6", distortions.k6);
   n.getParam("p1", distortions.p1);
   n.getParam("p2", distortions.p2);
-  return distortions;  
+  return distortions;
 }
 
 /// Makes a row of targets
-void makeLineOfTargets(std::string world_frame_id, int num_targets, int distance_between_targets, int first_target_number, geometry_msgs::Point first_target_position, geometry_msgs::Quaternion target_orientation, std_msgs::ColorRGBA world_origin_color, std_msgs::ColorRGBA regular_target_color)
+void makeLineOfTargets(std::string world_frame_id, int num_targets, int distance_between_targets,
+                       int first_target_number, geometry_msgs::Point first_target_position,
+                       geometry_msgs::Quaternion target_orientation, std_msgs::ColorRGBA world_origin_color,
+                       std_msgs::ColorRGBA regular_target_color)
 {
-
   std_msgs::ColorRGBA color = regular_target_color;
-  if(first_target_number == 0)
+  if (first_target_number == 0)
     color = world_origin_color;
 
-  geometry_msgs::Point position = first_target_position;    
-  for(int i = first_target_number; i < num_targets; i++)
+  geometry_msgs::Point position = first_target_position;
+  for (int i = first_target_number; i < num_targets; i++)
   {
-
-    rviz_simulator::Target *target = new rviz_simulator::Target(world_frame_id, "tag"+std::to_string(i), position, target_orientation, color, 0.1, g_interactive_marker_server, visualization_msgs::InteractiveMarkerControl::MOVE_3D );
+    rviz_simulator::Target* target =
+        new rviz_simulator::Target(world_frame_id, "tag" + std::to_string(i), position, target_orientation, color, 0.1,
+                                   g_interactive_marker_server, visualization_msgs::InteractiveMarkerControl::MOVE_3D);
     target->addTargetToServer();
     position.x += distance_between_targets;
 
     color = regular_target_color;
-  }  
+  }
 }
 
 int main(int argc, char** argv)
@@ -151,7 +154,7 @@ int main(int argc, char** argv)
   std_msgs::ColorRGBA grey = loadColor(n, "grey");
   std_msgs::ColorRGBA blue = loadColor(n, "blue");
   double target_scale;
-  n.getParam("target_scale", target_scale);  
+  n.getParam("target_scale", target_scale);
 
   /// setting camera marker color and scale
   std_msgs::ColorRGBA orange = loadColor(n, "orange");
@@ -168,7 +171,8 @@ int main(int argc, char** argv)
   double distance_between_targets;
   n.getParam("distance_between_targets", distance_between_targets);
   int first_target_number = 0;
-  makeLineOfTargets(world_frame_id, num_targets, distance_between_targets, first_target_number, starting_target_position, starting_target_orientation, blue, grey);
+  makeLineOfTargets(world_frame_id, num_targets, distance_between_targets, first_target_number,
+                    starting_target_position, starting_target_orientation, blue, grey);
 
   /// adding camera
   rviz_simulator::CameraIntrinsics camera_intrinsics = loadCameraIntrinsics(n);
@@ -178,15 +182,14 @@ int main(int argc, char** argv)
 
   // accurate starting camera orientation
   Eigen::Matrix3d rotation_matrix;
-  rotation_matrix << 
-    -1, 0, 0,
-    0, 0, -1,
-    0, -1, 0;
+  rotation_matrix << -1, 0, 0, 0, 0, -1, 0, -1, 0;
   Eigen::Quaterniond q(rotation_matrix);
-  ROS_INFO_STREAM("Quaternion: " << q.x() << " " << q.y() << " " <<q.z() << " " <<q.w() << "\n");
+  ROS_INFO_STREAM("Quaternion: " << q.x() << " " << q.y() << " " << q.z() << " " << q.w() << "\n");
   tf::quaternionEigenToMsg(q, starting_camera_orientation);
 
-  rviz_simulator::Camera camera(world_frame_id, "camera", starting_camera_postion, starting_camera_orientation, orange, 0.2, g_interactive_marker_server, visualization_msgs::InteractiveMarkerControl::BUTTON, camera_intrinsics, camera_distortions);
+  rviz_simulator::Camera camera(world_frame_id, "camera", starting_camera_postion, starting_camera_orientation, orange,
+                                0.2, g_interactive_marker_server, visualization_msgs::InteractiveMarkerControl::BUTTON,
+                                camera_intrinsics, camera_distortions);
 
   g_interactive_marker_server->applyChanges();
   ros::spin();

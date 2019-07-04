@@ -34,10 +34,11 @@
 namespace rviz_simulator
 {
 Target::Target(const std::string marker_frame_id, const std::string marker_name,
-               const geometry_msgs::Point marker_position_in_ROSWorld, const geometry_msgs::Quaternion marker_orientation_in_ROSWorld, const std_msgs::ColorRGBA marker_color_RGBA,
-               double marker_scale,
+               const geometry_msgs::Point marker_position_in_ROSWorld,
+               const geometry_msgs::Quaternion marker_orientation_in_ROSWorld,
+               const std_msgs::ColorRGBA marker_color_RGBA, double marker_scale,
                boost::shared_ptr<interactive_markers::InteractiveMarkerServer> g_interactive_marker_server,
-               unsigned int interaction_mode )
+               unsigned int interaction_mode)
 {
   this->marker_frame_id_ = marker_frame_id;
   this->marker_name_ = marker_name;
