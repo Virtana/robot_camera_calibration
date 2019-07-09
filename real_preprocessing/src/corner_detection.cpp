@@ -7,19 +7,17 @@
 #include "iostream"
 
 int count(0);
+std::string capture("1");
+std::ofstream fout;
 
 void aprilDetection(const apriltag_ros::AprilTagDetectionArray::ConstPtr& msg)
 { 
-  //input simulates single image capture : Press 0 to detect current frame
-  std::string capture;
-  std::getline(std::cin,capture);
-  if(capture=="0")
+  while(capture=="")
   {
-    Eigen::MatrixXd intrinsic(3, 3);  // potential calibration loading function
-    intrinsic << 630.3467672874693, 0, 314.10832937485145, 0, 624.9044125522948, 241.59156511756711, 0, 0, 1;
-    std::ofstream fout;
     if (!msg->detections.empty())
     {
+      Eigen::MatrixXd intrinsic(3, 3);  // potential calibration loading function
+      intrinsic << 630.3467672874693, 0, 314.10832937485145, 0, 624.9044125522948, 241.59156511756711, 0, 0, 1;
       //file name generation
       std::string filename("detections_"+std::to_string(count)+".yml");  
       fout.open(filename.c_str());
@@ -89,7 +87,9 @@ void aprilDetection(const apriltag_ros::AprilTagDetectionArray::ConstPtr& msg)
       count++;
     }
     fout.close();
+    capture = "1";
   }
+  std::getline(std::cin,capture);
 }
 
 int main(int argc, char** argv)
