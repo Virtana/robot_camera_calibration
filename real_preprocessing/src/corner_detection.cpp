@@ -12,7 +12,7 @@ std::ofstream fout;
 
 void aprilDetection(const apriltag_ros::AprilTagDetectionArray::ConstPtr& msg)
 { 
-  while(capture=="")
+  if(capture=="")
   {
     if (!msg->detections.empty())
     {
