@@ -7,17 +7,19 @@
 #include "iostream"
 
 int count(0);
-std::string capture("1");
+std::string capture("1");//prevenets first iteration YAML dump
 std::ofstream fout;
 
 void aprilDetection(const apriltag_ros::AprilTagDetectionArray::ConstPtr& msg)
 { 
-  if(capture=="")
+  if(capture=="") //specifies trigger key to dump YAML
   {
     if (!msg->detections.empty())
     {
-      Eigen::MatrixXd intrinsic(3, 3);  // potential calibration loading function
+      //intrinsic specification
+      Eigen::MatrixXd intrinsic(3, 3);  
       intrinsic << 630.3467672874693, 0, 314.10832937485145, 0, 624.9044125522948, 241.59156511756711, 0, 0, 1;
+      
       //file name generation
       std::string filename("detections_"+std::to_string(count)+".yml");  
       fout.open(filename.c_str());
@@ -87,9 +89,9 @@ void aprilDetection(const apriltag_ros::AprilTagDetectionArray::ConstPtr& msg)
       count++;
     }
     fout.close();
-    capture = "1";
+    capture = "1"; //ensures input key does not force infinite loop
   }
-  std::getline(std::cin,capture);
+  std::getline(std::cin,capture); //trigger input 
 }
 
 int main(int argc, char** argv)
