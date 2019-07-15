@@ -11,7 +11,7 @@ std::ofstream fout;
 std::vector<double> intrinsic;
 std::pair<int,int> coordinate[4];
 std::string capture("1");
-Eigen::MatrixXd intrinsic_mat(3, 3);
+Eigen::MatrixXd kintrinsic_mat(3, 3);
 
 void intrinsicLoad(std::vector<double> intrinsic)
 {
