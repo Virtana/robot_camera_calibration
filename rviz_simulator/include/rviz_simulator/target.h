@@ -48,7 +48,7 @@ public:
   /// @param marker_color_RGBA                Marker colour (red, green blue) and opacity setting
   /// @param marker_scale                     The length of a side of the interactive marker
   /// @param g_interactive_marker_server      Shared pointer for interactive marker server
-  /// @oaram interaction_mode                 Specifies how the marker will react to events (3D MOVEMENT or BUTTON
+  /// @param interaction_mode                 Specifies how the marker will react to events (3D MOVEMENT or BUTTON
   /// clicks)
   Target(const std::string marker_frame_id, const std::string marker_name,
          const geometry_msgs::Point marker_position_in_ROSWorld,
@@ -102,5 +102,4 @@ private:
   void targetFeedback(const visualization_msgs::InteractiveMarkerFeedbackConstPtr& feedback);
 };
 }
-
 #endif
