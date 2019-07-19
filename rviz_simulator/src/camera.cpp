@@ -40,6 +40,7 @@ void CameraProperties::populateCameraMatrix()
   camera_matrix << fx,  0, cx, 0,
                     0, fy, cy, 0, 
                     0,  0,  1, 0;
+  ROS_INFO("Camera matix populated.\n");
 }
 
 Eigen::MatrixXd CameraProperties::getCameraMatrix()
@@ -56,24 +57,24 @@ Camera::Camera(const std::string marker_frame_id, const std::string marker_name,
   : Target(marker_frame_id, marker_name, marker_position_in_ROSWorld, marker_orientation_in_ROSWorld, marker_color_RGBA,
            marker_scale, g_interactive_marker_server, interaction_mode)
 {
-  // setting camera intrinsics
   this->camera_properties_ = camera_properties;
   this->camera_properties_.populateCameraMatrix();
 
-  // assuming square targets
   this->target_x_length_ = marker_scale;
   this->target_y_length_ = marker_scale;
+  this->initObjPointsInTarget();
 
   // adding a shutter release button to the camera
   this->interactive_marker_.controls[0].interaction_mode = visualization_msgs::InteractiveMarkerControl::BUTTON;
+  ROS_INFO("Camera shutter button added.\n");
 
-  // create ouput directory for yaml files
+  // FIXME: create ouput directory for yaml files if it does not already exist
   int detections_folder_number = int(ros::Time::now().toSec());
   this->num_pictures_ = 0;
   std::string output_folder_name = "detections_" + std::to_string(detections_folder_number);
 
   std::string package_path = ros::package::getPath("rviz_simulator");
-  this->output_folder_path_ = package_path + "/" + output_folder_name;
+  this->output_folder_path_ = package_path + "/detections/" + output_folder_name;
 
   if (mkdir(this->output_folder_path_.c_str(), 0777) == -1)
     ROS_ERROR_STREAM("Error :  " << strerror(errno) << std::endl);
@@ -81,12 +82,31 @@ Camera::Camera(const std::string marker_frame_id, const std::string marker_name,
   else
     ROS_INFO_STREAM("Output directory created sucessfully: " << this->output_folder_path_.c_str() << std::endl);
 
-  // add camera interactive marker to the global interactive marker server
   this->addCameraToServer();
+
+  this->dumpCameraPropertiesToYAMLFile("camera.yaml");
+
+  this->first_picture_taken_ = false; 
 }
 
 Camera::~Camera()
 {
+}
+
+void Camera::initObjPointsInTarget()
+{
+  Eigen::Vector4d c0, c1, c2, c3;
+  c0 << -this->target_x_length_/2, 0, -this->target_y_length_/2, 1;
+  c1 << -this->target_x_length_/2, 0, this->target_y_length_/2, 1;
+  c2 << this->target_x_length_/2, 0, this->target_y_length_/2, 1;
+  c3 << this->target_x_length_/2, 0, -this->target_y_length_/2, 1;
+
+  this->obj_points_in_target_.push_back(c0);
+  this->obj_points_in_target_.push_back(c1);
+  this->obj_points_in_target_.push_back(c2);
+  this->obj_points_in_target_.push_back(c3);
+ 
+  ROS_INFO("Object points in target calculated.\n");
 }
 
 void Camera::addCameraToServer()
@@ -94,7 +114,7 @@ void Camera::addCameraToServer()
   this->g_interactive_marker_server_->insert(this->interactive_marker_);
   this->g_interactive_marker_server_->setCallback(this->interactive_marker_.name,
                                                   boost::bind(&rviz_simulator::Camera::cameraFeedback, this, _1));
-  ROS_INFO_STREAM("Camera added\n");
+  ROS_INFO_STREAM("Camera added to interactive marker server.\n");
 }
 
 void Camera::cameraFeedback(const visualization_msgs::InteractiveMarkerFeedbackConstPtr& feedback)
@@ -140,6 +160,7 @@ Eigen::Affine3d Camera::calculateReference_T_Target(visualization_msgs::Interact
   return origin_T_reference.inverse() * origin_T_target;
 }
 
+// TODO: remove transformToYAMLSeq
 void transformToYAMLSeq(Eigen::Affine3d& transform, YAML::Emitter& out)
 {
   for (int i = 0; i < transform.Dim + 1; i++)
@@ -153,27 +174,31 @@ void transformToYAMLSeq(Eigen::Affine3d& transform, YAML::Emitter& out)
 
 void Camera::takePicture()
 {
-  YAML::Emitter out;
-  out << YAML::BeginMap;  // level 0
-  out << YAML::Key << "detections";
-  out << YAML::Value << YAML::BeginSeq;  // level 1
+  if(!this->first_picture_taken_)
+  {
+    this->calculateWorld_T_Targets("targets.yaml");
+    this->first_picture_taken_ = true;
+  }
 
-  // considering tag0 as the world origin
-  visualization_msgs::InteractiveMarker world_marker, camera_marker;
+  // YAML Emitter for the detections_X.yaml file
+  YAML::Emitter detections_out;
+  detections_out << YAML::BeginMap;  // level 0
+  detections_out << YAML::Key << "detections";
+  detections_out << YAML::Value << YAML::BeginSeq;  // level 1
+
+  visualization_msgs::InteractiveMarker camera_marker;
+  this->g_interactive_marker_server_->get(this->marker_name_, camera_marker);
+
+  visualization_msgs::InteractiveMarker world_marker;
   this->g_interactive_marker_server_->get("tag0", world_marker);
 
-  int num_targets = this->g_interactive_marker_server_->size() - 1;  // -1 to cater for the camera marker
+  Eigen::Affine3d world_T_camera = this->calculateReference_T_Target(world_marker, camera_marker);
 
   // processing all camera_T_target transforms
-  for (int i = 0; i < num_targets; i++)
+  for (int i = 0; i < this->world_T_targets_.size(); i++)
   {
-    // getting camera extrinsics (camera_T_target)
-    std::string target_name = "tag" + std::to_string(i);
-    ROS_INFO_STREAM("Target name: " << target_name << std::endl);
-    visualization_msgs::InteractiveMarker target_marker;
-    this->g_interactive_marker_server_->get(target_name, target_marker);
-    this->g_interactive_marker_server_->get(this->marker_name_, camera_marker);
-    Eigen::Affine3d camera_T_target = this->calculateReference_T_Target(camera_marker, target_marker);
+    // getting camera_T_target    
+    Eigen::Affine3d camera_T_target = world_T_camera.inverse()*world_T_targets_[i];
 
     // check if target is in front of camera and camera is in front of target and target is in range
     // if yes then process corners
@@ -184,52 +209,32 @@ void Camera::takePicture()
 
       if (!corners.empty())
       {
-        out << YAML::BeginMap;
-        out << YAML::Key << "TargetID" << YAML::Value << std::to_string(i);
-        out << YAML::Key << "corners";
-        out << YAML::Value << YAML::BeginMap;
+        detections_out << YAML::BeginMap;
+        detections_out << YAML::Key << "targetID" << YAML::Value << std::to_string(i);
+        detections_out << YAML::Key << "corners";
+        detections_out << YAML::Value << YAML::BeginMap;
         for (int i = 0; i < corners.size(); i++)
         {
-          out << YAML::Key << i;
-          out << YAML::Value << YAML::BeginSeq << int(corners[i][0]) << int(corners[i][1]) << YAML::EndSeq;
+          detections_out << YAML::Key << i;
+          detections_out << YAML::Value << YAML::BeginSeq << int(corners[i][0]) << int(corners[i][1]) << YAML::EndSeq;
         }
-        out << YAML::EndMap;
-
-        // getting world_T_target
-        // outputting world_T_target to YAML row_wise
-        Eigen::Affine3d world_T_target = this->calculateReference_T_Target(world_marker, target_marker);
-        out << YAML::Key << "pose" << YAML::Value << YAML::BeginSeq;
-        transformToYAMLSeq(world_T_target, out);
-        out << YAML::EndSeq;
-        out << YAML::EndMap;
+        detections_out << YAML::EndMap;
+        
+        detections_out << YAML::EndMap;
       }
     }
-  }                     // end processing all camera_T_target transforms
-  out << YAML::EndSeq;  // level 1
+  }  // end processing all camera_T_target transforms
+  detections_out << YAML::EndSeq;  // level 1
 
-  // outputting camera pose to YAML File
-  Eigen::Affine3d world_T_camera = this->calculateReference_T_Target(world_marker, camera_marker);
+  // outputting world_T_camera to YAML File
+  detections_out << YAML::Key << "world_T_camera" << YAML::Value << YAML::BeginMap;  // level 0
+  detections_out << YAML::Key << "pose" << YAML::Value << YAML::BeginSeq;
+  transformToYAMLSeq(world_T_camera, detections_out);
+  detections_out << YAML::EndSeq;
 
-  out << YAML::Key << "camera" << YAML::Value << YAML::BeginMap;  // level 0
-  out << YAML::Key << "pose" << YAML::Value << YAML::BeginSeq;
-  transformToYAMLSeq(world_T_camera, out);
-  out << YAML::EndSeq;
+  detections_out << YAML::EndMap;  // level 0
 
-  // publishing camera intrinsics
-  out << YAML::Key << "intrinsics" << YAML::Value << YAML::BeginMap;  // level 1
-  out << YAML::Key << "fx" << YAML::Value << this->camera_properties_.fx;
-  out << YAML::Key << "fy" << YAML::Value << this->camera_properties_.fy;
-  out << YAML::Key << "cx" << YAML::Value << this->camera_properties_.cx;
-  out << YAML::Key << "cy" << YAML::Value << this->camera_properties_.cy;
-  out << YAML::Key << "width" << YAML::Value << this->camera_properties_.image_width;
-  out << YAML::Key << "height" << YAML::Value << this->camera_properties_.image_height;
-  out << YAML::Key << "near_clip" << YAML::Value << this->camera_properties_.min_distance_between_camera_and_target;
-  out << YAML::Key << "far_clip" << YAML::Value << this->camera_properties_.max_distance_between_camera_and_target;
-  out << YAML::EndMap;  // level 1
-
-  out << YAML::EndMap;  // level 0
-
-  out << YAML::EndMap;  // level 0
+  detections_out << YAML::EndMap;  // level 0
 
   // outputting to .yaml file
   std::string output_file_name = "detections_" + std::to_string(this->num_pictures_) + ".yaml";
@@ -239,8 +244,8 @@ void Camera::takePicture()
     ROS_ERROR_STREAM("Output file error.\n" << output_file_path << "\n");
   else
   {
-    fout << out.c_str();
-    ROS_INFO_STREAM("Target corner detections dumped to " << output_file_path << "\n");
+    fout << detections_out.c_str();
+    ROS_INFO_STREAM("Corner detections dumped to " << output_file_path << "\n");
     fout.close();
     this->num_pictures_++;
   }
@@ -248,27 +253,12 @@ void Camera::takePicture()
 
 std::vector<Eigen::Vector2d> Camera::processCorners(Eigen::Affine3d camera_T_target)
 {
-  // world_T_target transforms to the center of a target
-  // c0 is the bottom left corner of a target.
-  // The remaining corners are considered in a clockwise order
-  Eigen::Vector4d c0, c1, c2, c3;
-  c0 << -this->target_x_length_/2, 0, -this->target_y_length_/2, 1;
-  c1 << -this->target_x_length_/2, 0, this->target_y_length_/2, 1;
-  c2 << this->target_x_length_/2, 0, this->target_y_length_/2, 1;
-  c3 << this->target_x_length_/2, 0, -this->target_y_length_/2, 1;
-
-  std::vector<Eigen::Vector4d> corners4d;
-  corners4d.push_back(c0);
-  corners4d.push_back(c1);
-  corners4d.push_back(c2);
-  corners4d.push_back(c3);
-
   std::vector<Eigen::Vector2d> corners2d;
 
   // get corners
-  for (int i = 0; i < corners4d.size(); i++)
+  for (int i = 0; i < this->obj_points_in_target_.size(); i++)
   {
-    Eigen::Vector2d corner = calculatePixelCoords(camera_T_target, corners4d[i]);
+    Eigen::Vector2d corner = calculatePixelCoords(camera_T_target, this->obj_points_in_target_[i]);
     ROS_INFO_STREAM("Corner " << i << " u: " << corner[0] << " v: " << corner[1] << std::endl);
     if (!this->isWithinImage(corner))
       return std::vector<Eigen::Vector2d>();  // return empty vector
@@ -352,9 +342,10 @@ bool Camera::isInFrontOfTarget(Eigen::Affine3d target_T_camera)
 
 bool Camera::areValidCorners(std::vector<Eigen::Vector2d> corners)
 {
-  // TODO
+  // TODO areValidCorners
 }
 
+// FIXME
 bool Camera::isInRange(Eigen::Affine3d transform)
 {
   if (transform.translation().norm() >= this->camera_properties_.min_distance_between_camera_and_target &&
@@ -366,4 +357,144 @@ bool Camera::isInRange(Eigen::Affine3d transform)
   ROS_INFO_STREAM("Target not in range\n.");
   return false;
 }
+
+void Camera::dumpCameraPropertiesToYAMLFile(std::string output_file_name)
+{
+  YAML::Emitter out;
+  out << YAML::BeginMap; // level 0 map
+
+  out << YAML::Key << "image_width" << YAML::Value << this->camera_properties_.image_width;
+  out << YAML::Key << "image_height" << YAML::Value << this->camera_properties_.image_height;
+  out << YAML::Key << "camera_name" << YAML::Value << this->camera_properties_.camera_name;
+
+  // camera matrix
+  out << YAML::Key << "camera_matrix" << YAML::Value; 
+  out << YAML::BeginMap; // camera matrix map
+  out << YAML::Key << "rows" << YAML::Value << 3;
+  out << YAML::Key << "cols" << YAML::Value << 3;
+  out << YAML::Key << "data" << YAML::Value;
+  out << YAML::BeginSeq; // camera matrix data sequence
+  out << camera_properties_.fx << 0 << camera_properties_.cx << 0 << camera_properties_.fy << camera_properties_.cy << 0 << 0 << 1;
+  out << YAML::EndSeq;  // camera matrix data sequence
+  out << YAML::EndMap;  // camera matrix map
+
+  // distortions
+  out << YAML::Key << "distortion_model" << YAML::Value << camera_properties_.distortion_model;
+  out << YAML::Key << "distortion_coefficients" << YAML::Value;
+  out << YAML::BeginMap;  // distortion coefficitents map
+  out << YAML::Key << "rows" << YAML::Value << 1;
+  out << YAML::Key << "cols" << YAML::Value << 5;
+  out << YAML::Key << "data" << YAML::Value;
+  out << YAML::BeginSeq;  // distortion coefficients data sequence
+  out << camera_properties_.k1 << camera_properties_.k2 << camera_properties_.p1 << camera_properties_.p2 << camera_properties_.k3;
+  out << YAML::EndSeq;  // distortion coefficients data sequence
+  out << YAML::EndMap;  // distortion coefficitents map
+
+  // rectification matrix (omitted)
+
+  // projection matrix (omitted)
+
+  out << YAML::EndMap; // level 0 map
+
+  // dumping to YAML file
+  std::string camera_file_path = this->output_folder_path_+"/"+output_file_name;
+  std::ofstream fout(camera_file_path);
+  if(!fout)
+  {
+    ROS_ERROR_STREAM("Output file error.\n" << camera_file_path << "\n");
+  }
+  else
+  {
+    fout << out.c_str();
+    ROS_INFO_STREAM("Camera properties dumped to " << camera_file_path << "\n");
+  }
+  fout.close();
+}
+
+void Camera::calculateWorld_T_Targets(std::string output_file_name)
+{
+  // YAML Emitter for the targets.yaml file
+  YAML::Emitter targets_out;
+  targets_out << YAML::BeginMap;  // level 0
+  targets_out << YAML::Key << "targets";
+  targets_out << YAML::Value << YAML::BeginSeq;  // targets sequence
+
+  // considering tag0 as the world origin
+  visualization_msgs::InteractiveMarker world_marker;
+  this->g_interactive_marker_server_->get("tag0", world_marker);
+
+  int num_targets = this->g_interactive_marker_server_->size() - 1;  // -1 to cater for the camera marker
+
+  for(int i = 0; i < num_targets; i++)
+  {
+    // getting world_T_target
+    std::string target_name = "tag" + std::to_string(i);
+    ROS_INFO_STREAM("Calculated and stored targetID: " << target_name << std::endl);
+    visualization_msgs::InteractiveMarker target_marker;
+    this->g_interactive_marker_server_->get(target_name, target_marker);
+    Eigen::Affine3d world_T_target = this->calculateReference_T_Target(world_marker, target_marker);
+    this->world_T_targets_.push_back(world_T_target);
+    
+    // yaml output
+    targets_out << YAML::BeginMap; 
+    targets_out << YAML::Key << "targetID" << YAML::Value << i;
+    this->Affine3dToYaml(world_T_target, "world_T_target", targets_out);
+    this->ObjPointsInTargetToYAML(targets_out);
+    targets_out << YAML::EndMap; 
+  }
+  targets_out << YAML::EndMap;  // level 0
+
+  // outputting to .yaml file
+  std::string output_file_path = this->output_folder_path_ + "/" + output_file_name;
+  std::ofstream fout(output_file_path);
+  if (!fout)
+    ROS_ERROR_STREAM("Output file error.\n" << output_file_path << "\n");
+  else
+  {
+    fout << targets_out.c_str();
+    ROS_INFO_STREAM("Target data dumped to " << output_file_path << "\n");
+    ROS_WARN("Do not move the targets in rviz from this point!\n");
+    fout.close();
+  }
+}
+
+std::vector<double> Camera::Affine3dRotationToRodrigues(Eigen::Affine3d affine3d)
+{
+  Eigen::AngleAxisd angleAxis;
+  angleAxis = affine3d.rotation();
+  std::vector<double> rodrigues;
+  rodrigues.push_back(angleAxis.axis().x()/angleAxis.angle());
+  rodrigues.push_back(angleAxis.axis().y()/angleAxis.angle());
+  rodrigues.push_back(angleAxis.axis().z()/angleAxis.angle());
+  return rodrigues;
+}
+
+std::vector<double> Camera::Affine3dToTranslation(Eigen::Affine3d affine3d)
+{
+  std::vector<double> translation;
+  translation.push_back(affine3d.translation().x());
+  translation.push_back(affine3d.translation().y());
+  translation.push_back(affine3d.translation().z());
+  return translation;
+}
+
+void Camera::Affine3dToYaml(Eigen::Affine3d affine3d, std::string name, YAML::Emitter &out)
+{
+  out << YAML::Key << name << YAML::Value << YAML::BeginMap;
+  out << YAML::Key << "rotation" << YAML::Value << YAML::BeginSeq << YAML::Flow << this->Affine3dRotationToRodrigues(affine3d) << YAML::EndSeq;
+  out << YAML::Key << "translation" << YAML::Value << YAML::BeginSeq << YAML::Flow << this->Affine3dToTranslation(affine3d) << YAML::EndSeq;;
+  out << YAML::EndMap;
+}
+
+void Camera::ObjPointsInTargetToYAML(YAML::Emitter &out)
+{
+  out << YAML::Key << "obj_points_in_target" << YAML::Value << YAML::BeginMap;
+  for(int i = 0; i < this->obj_points_in_target_.size(); i++)
+  {
+    Eigen::Vector4d point = this->obj_points_in_target_[i];
+    out << YAML::Key << i << YAML::Value << YAML::BeginSeq << point.x() << point.y() << point.z() << YAML::EndSeq;
+  }
+  out << YAML::EndMap;
+}
+
 }

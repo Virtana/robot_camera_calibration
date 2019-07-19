@@ -56,6 +56,8 @@ namespace rviz_simulator
 struct CameraProperties
 {
 public:
+  std::string camera_name;
+
   /// focal length in pixels
   double fx;
   double fy;
@@ -72,6 +74,7 @@ public:
   double min_distance_between_camera_and_target;
 
   // camera distortion coefficients
+  std::string distortion_model;
   double k1, k2, k3, k4, k5, k6;  /// radial distortions
   double p1, p2;                  /// tangential distortions
 
@@ -128,7 +131,20 @@ private:
   double target_y_length_;                /// The real-world (vertical) length of a target
   int num_pictures_;                      /// The number of pictures taken during the running of the node
   std::string output_folder_path_;        /// absolute path of folder in which the detection yaml files are dumped
+  bool first_picture_taken_;               /// set to true when the first picture is taken, ensures the target.yaml is written to only once
+  std::vector<Eigen::Affine3d> world_T_targets_;    /// considering index 0 as the world origin
+  std::vector<Eigen::Vector4d> obj_points_in_target_;
 
+  /// Function to populate obj_points_in_target with the 4 target corners
+  // world_T_target transforms to the center of a target
+  // c0 is the bottom left corner of a target.
+  // The remaining corners are considered in a clockwise order
+  void initObjPointsInTarget();
+
+  /// Function to calculate all world_T_targets and dumps it to a YAML file
+  /// Called only once, when the first picture is taken
+  /// @param output_file_name
+  void calculateWorld_T_Targets(std::string output_file_name);
 
   /// Function to call on the arrival of a feedback message (3D movement of camera or left mouse click).
   /// @param    Reference for marker message.
@@ -184,6 +200,32 @@ private:
 
   /// Checks if the angle between the camera's z axis and the target's z axis is valid
   bool isValidAngle();
+
+  /// FIXME: Currently this is hardcoded to conform to the AprilTag_ROS YAML file example the camera driver accepts
+  /// Function outputs the camera properties (intrinsics, distortions) to a YAML file
+  /// @param output_file_name     The name of the output file
+  void dumpCameraPropertiesToYAMLFile(std::string output_file_name);
+
+  /// FIXME: NOT CONVERTING PROPERLY (INF + NANs)
+  /// Function converts the rotation matrix of the Affine3d to a Rodrigues angle-axis rotation triple
+  /// @param affine3d
+  /// @return           a vector containing the Rodrigues angle-axis triple [x, y, z]
+  std::vector<double> Affine3dRotationToRodrigues(Eigen::Affine3d affine3d);
+
+  /// Function converts the translation of the Affine3d to a std::vector
+  /// @param affine3d
+  /// @return           a vector containing the translation
+  std::vector<double> Affine3dToTranslation(Eigen::Affine3d affine3d); 
+
+  /// Function outputs an affine3d to YAML as A Rodrigues angle-axis and a translation
+  /// @param affine3d
+  /// @param name       name of the transform beign emitted to YAML
+  /// @param out
+  void Affine3dToYaml(Eigen::Affine3d affine3d, std::string name, YAML::Emitter &out);
+
+  /// Function to emit obj_points_in_target to YAML::Emitter
+  /// @param out
+  void ObjPointsInTargetToYAML(YAML::Emitter &out);
 };
 }
 

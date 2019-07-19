@@ -32,10 +32,18 @@
 /*  TODO:
  *  make wall
  *  make room
- *  publish transforms to yaml
- *  neaten up includes, cmake, packages
  *  UML diagram
  *  Error checking and exception handling
+ *  
+ * ===========================================
+ * DONE! Fix code to accept new camera.yaml file 
+ *    https://docs.google.com/document/d/1wfD5lMhkFVvgMvZalcYbTYDLY72YhHUo9SZysz4TK7I/edit#bookmark=id.ntgdo529fblw
+ * 
+ * Fix code to output new YAML format.
+ * Function to detect if target is too far away
+ * remove near and far clip lines
+ * Make a root detections folder if it doesnt already exist
+ * Make it impossible to move markers after first camera click
  */
 
 #include <ros/ros.h>
@@ -88,22 +96,39 @@ geometry_msgs::Quaternion loadOrientation(const ros::NodeHandle& n, const std::s
 rviz_simulator::CameraProperties loadCameraProperties(const ros::NodeHandle& n)
 {
   rviz_simulator::CameraProperties camera_properties;
-  n.getParam("width", camera_properties.image_width);
-  n.getParam("height", camera_properties.image_height);
-  n.getParam("fx", camera_properties.fx);
-  n.getParam("fy", camera_properties.fy);
-  n.getParam("cx", camera_properties.cx);
-  n.getParam("cy", camera_properties.cy);
+  n.getParam("image_width", camera_properties.image_width);
+  n.getParam("image_height", camera_properties.image_height);
+  n.getParam("camera_name", camera_properties.camera_name);
+
+  std::vector<double> camera_matrix;
+  n.getParam("camera_matrix/data", camera_matrix);
+  camera_properties.fx = camera_matrix[0];
+  camera_properties.fy = camera_matrix[4];
+  camera_properties.cx = camera_matrix[2];
+  camera_properties.cy = camera_matrix[5];
+
   n.getParam("near_clip", camera_properties.min_distance_between_camera_and_target);
   n.getParam("far_clip", camera_properties.max_distance_between_camera_and_target);
-  n.getParam("k1", camera_properties.k1);
-  n.getParam("k2", camera_properties.k2);
-  n.getParam("k3", camera_properties.k3);
-  n.getParam("k4", camera_properties.k4);
-  n.getParam("k5", camera_properties.k5);
-  n.getParam("k6", camera_properties.k6);
-  n.getParam("p1", camera_properties.p1);
-  n.getParam("p2", camera_properties.p2);
+  
+  n.getParam("distortion_model", camera_properties.distortion_model);
+  std::vector<double> distortion_coefficients;
+  n.getParam("distortion_coefficients/data", distortion_coefficients);
+  if(camera_properties.distortion_model == "plumb_bob")
+  {
+    camera_properties.k1 = distortion_coefficients[0];
+    camera_properties.k2 = distortion_coefficients[1];
+    camera_properties.k3 = distortion_coefficients[4];
+    camera_properties.k4 = 0;
+    camera_properties.k5 = 0;
+    camera_properties.k6 = 0;
+    camera_properties.p1 = distortion_coefficients[2];
+    camera_properties.p2 = distortion_coefficients[3];
+  }
+  else
+  {
+    ROS_ERROR("Unknown camera distortion model specified!\n");
+  }  
+
   return camera_properties;
 }
 

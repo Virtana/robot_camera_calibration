@@ -34,6 +34,9 @@ and 4 nodes in `debug_mode`:
 To enter `debug_mode`, run the launch file with the command line arg 
 > `debug_mode:=true`
 
+By default, the `realsense_camera_intrinsics.yaml` file is loaded. To specify another camera intrinsics file, run the launch file with the command line arg
+> `camera_intrinsics_file:=<camera_intrinsics_file_name.yaml>`  
+
 The `simulator` node creates a new folder `"detections_ROS_timestamp"` in the `rviz_simulator` package folder. A new detections folder with a new timestamp is created each time `roslaunch` is run.
 
 Drag around the virtual camera and multiple virtual fiducial targets.  

@@ -1,7 +1,10 @@
 <launch>
   <!-- loading values into the ros parameter server -->
   <rosparam command="load" file="$(find rviz_simulator)/config/initialize_simulator.yaml" />
-  <rosparam command="load" file="$(find rviz_simulator)/config/realsense_camera_intrinsics.yaml" />
+
+  <!-- adding a command line arg for camera intrinsics file -->
+  <arg name="camera_intrinsics_file" default="realsense_camera_intrinsics.yaml"/>
+  <rosparam command="load" file="$(find rviz_simulator)/config/$(arg camera_intrinsics_file)" />
   
   <!-- adding a command line arg for debug mode -->
   <arg name="debug_mode" default="false"/>
