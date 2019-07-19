@@ -12,8 +12,9 @@ Clone the repo into the `src` folder of your catkin workspace.
 Run `catkin_make` in the root of your workspace to build the `rviz_simulator` package.  
 
 ### Required Dependencies
-- `yaml.cpp` [Installation Instructions](https://github.com/jbeder/yaml-cpp)
+- YAML-cpp [Installation Instructions](https://github.com/jbeder/yaml-cpp)
 - Eigen [Installation Instructions](http://eigen.tuxfamily.org/dox/GettingStarted.html)
+- Ceres [Installation Instructions](http://ceres-solver.org/installation.html)
 
 ## Execution Instructions
 Edit the `initialize_simulator.yaml` file to change the simulator configuration.

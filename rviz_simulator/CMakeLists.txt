@@ -1,3 +1,8 @@
+# CERES
+# https://groups.google.com/forum/#!topic/ceres-solver/wt8lf1aXrfg
+# https://github.com/catkin/catkin_simple
+# https://github.com/ethz-asl/ceres_catkin
+
 cmake_minimum_required(VERSION 2.8.3)
 project(rviz_simulator)
 set (CMAKE_CXX_STANDARD 11)
@@ -19,8 +24,12 @@ find_package(catkin REQUIRED COMPONENTS
 
 ## System dependencies are found with CMake's conventions
 find_package(Boost REQUIRED COMPONENTS system)
+find_package(Ceres REQUIRED)
 # find_package(Eigen REQUIRED)
 # find_package(cmake_modules REQUIRED)
+
+# find_package(catkin_simple REQUIRED)
+# catkin_simple()
 
 
 ## Uncomment this if the package has a setup.py. This macro ensures
@@ -125,6 +134,7 @@ include_directories(include
   ${catkin_INCLUDE_DIRS} 
   ${boost_INCLUDE_DIRS}
   ${Eigen_INCLUDE_DIRS}
+  ${CERES_INCLUDE_DIRS}
 )
 
 
@@ -172,27 +182,50 @@ include_directories(include
 ## add_executable(one_marker src/one_marker.cpp)
 ## target_link_libraries(one_marker ${catkin_LIBRARIES})
 
+FIND_PACKAGE(yaml-cpp REQUIRED)
+
+
+# simulate
 add_executable(simulate 
   src/simulate.cpp  
 )
 
-## Declare a C++ library
-add_library(${PROJECT_NAME}
-  src/simulate.cpp
+add_library(simulate_lib
   src/camera.cpp
   src/target.cpp
-  
-
 )
 
-target_link_libraries(${PROJECT_NAME} 
+## Declare a C++ library
+#add_library(${PROJECT_NAME}
+#  src/simulate.cpp
+#  src/camera.cpp
+#  src/target.cpp
+#)
+
+target_link_libraries(simulate
+  simulate_lib
   ${catkin_LIBRARIES} 
   ${boost_LIBRARIES}
+  ${CERES_LIBRARIES}
+  yaml-cpp
 )
 
-target_link_libraries(simulate 
-  ${PROJECT_NAME} yaml-cpp
-)
+#target_link_libraries(simulate 
+#  ${PROJECT_NAME} yaml-cpp
+#)
+
+# synthetic_optimization
+# add_executable(synthetic_optimization src/synthetic_optimization.cpp)
+#target_link_libraries(synthetic_optimization
+ # ${catkin_LIBRARIES} 
+ # ${boost_LIBRARIES}
+ # ${CERES_LIBRARIES}
+ # yaml-cpp
+#)
+
+# target_link_libraries(${PROJECT_NAME} yaml-cpp)
+
+
 
 # add_dependencies()
 
@@ -211,11 +244,11 @@ target_link_libraries(simulate
 # )
 
 ## Mark executables and/or libraries for installation
- install(TARGETS ${PROJECT_NAME} 
-   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
- )
+# install(TARGETS ${PROJECT_NAME} 
+#   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+#   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+#   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+# )
 
 ## Mark cpp header files for installation
  install(DIRECTORY include/${PROJECT_NAME}/

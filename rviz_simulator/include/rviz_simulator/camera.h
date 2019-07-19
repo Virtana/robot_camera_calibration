@@ -45,6 +45,9 @@
 // for getting package path
 #include <ros/package.h>
 
+// for Rotation Matrix to Rodrigues angle axis
+#include <ceres/rotation.h>
+
 #include "rviz_simulator/target.h"
 
 namespace rviz_simulator
@@ -69,7 +72,7 @@ public:
   /// camera image extremes
   int image_height;
   int image_width;
-  double min_distance_between_target_corners;
+  double min_distance_between_target_corners;     // in pixels
   double max_distance_between_camera_and_target;
   double min_distance_between_camera_and_target;
 
@@ -141,6 +144,9 @@ private:
   // The remaining corners are considered in a clockwise order
   void initObjPointsInTarget();
 
+  /// Helper function to make output directories for yaml files
+  void makeOutputDirectories();
+
   /// Function to calculate all world_T_targets and dumps it to a YAML file
   /// Called only once, when the first picture is taken
   /// @param output_file_name
@@ -190,13 +196,11 @@ private:
   /// @return                   True if the camera is in front of the target, false otherwise
   bool isInFrontOfTarget(Eigen::Affine3d target_T_camera);
 
+  /// Checks if a target is too far from the camera (distance between interactive markers)
   /// Checks if the four corners of a target are not too close to each other when projected into 2d
   /// @param corners    A vector of the 4 corners of a target
   /// return            True if the four corners of a target are not too close when projected into 2d, false otherwise
-  bool areValidCorners(std::vector<Eigen::Vector2d> corners);
-
-  /// Checks if a target is too far from the camera (distance between interactive markers)
-  bool isInRange(Eigen::Affine3d transform);
+  bool isInRange(std::vector<Eigen::Vector2d> corners);
 
   /// Checks if the angle between the camera's z axis and the target's z axis is valid
   bool isValidAngle();
@@ -206,7 +210,6 @@ private:
   /// @param output_file_name     The name of the output file
   void dumpCameraPropertiesToYAMLFile(std::string output_file_name);
 
-  /// FIXME: NOT CONVERTING PROPERLY (INF + NANs)
   /// Function converts the rotation matrix of the Affine3d to a Rodrigues angle-axis rotation triple
   /// @param affine3d
   /// @return           a vector containing the Rodrigues angle-axis triple [x, y, z]

@@ -36,14 +36,9 @@
  *  Error checking and exception handling
  *  
  * ===========================================
- * DONE! Fix code to accept new camera.yaml file 
- *    https://docs.google.com/document/d/1wfD5lMhkFVvgMvZalcYbTYDLY72YhHUo9SZysz4TK7I/edit#bookmark=id.ntgdo529fblw
- * 
- * Fix code to output new YAML format.
- * Function to detect if target is too far away
- * remove near and far clip lines
- * Make a root detections folder if it doesnt already exist
- * Make it impossible to move markers after first camera click
+ *  
+ *  Make it impossible to move markers after first camera click
+ *  Requires a removal and reinit of interactive markers upon first camera click
  */
 
 #include <ros/ros.h>
@@ -106,9 +101,6 @@ rviz_simulator::CameraProperties loadCameraProperties(const ros::NodeHandle& n)
   camera_properties.fy = camera_matrix[4];
   camera_properties.cx = camera_matrix[2];
   camera_properties.cy = camera_matrix[5];
-
-  n.getParam("near_clip", camera_properties.min_distance_between_camera_and_target);
-  n.getParam("far_clip", camera_properties.max_distance_between_camera_and_target);
   
   n.getParam("distortion_model", camera_properties.distortion_model);
   std::vector<double> distortion_coefficients;
@@ -128,6 +120,7 @@ rviz_simulator::CameraProperties loadCameraProperties(const ros::NodeHandle& n)
   {
     ROS_ERROR("Unknown camera distortion model specified!\n");
   }  
+  camera_properties.min_distance_between_target_corners = 30;
 
   return camera_properties;
 }
