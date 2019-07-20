@@ -1,0 +1,20 @@
+image_width: 1032
+image_height: 772
+camera_name: "Photoneo (Camera)"
+camera_matrix:
+  rows: 3
+  cols: 3
+  data: [1109.596, 0, 503.712, 0, 1109.596, 403.0737, 0, 0, 1]
+distortion_model: "plumb_bob"
+distortion_coefficients:
+  rows: 1
+  cols: 5
+  data: [0, 0, 0, 0, 0]
+rectification_matrix:
+  rows: 3
+  cols: 3
+  data: [1, 0, 0, 0, 1, 0, 0, 0, 1]
+projection_matrix:
+  rows: 3
+  cols: 4
+  data: [468.456, 0, 320, 0, 0, 468.456, 240, 0, 0, 0, 1, 0]

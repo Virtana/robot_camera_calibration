@@ -3,7 +3,7 @@
   <rosparam command="load" file="$(find rviz_simulator)/config/initialize_simulator.yaml" />
 
   <!-- adding a command line arg for camera intrinsics file -->
-  <arg name="camera_intrinsics_file" default="realsense_camera_intrinsics.yaml"/>
+  <arg name="camera_intrinsics_file" default="photoneo_camera_intrinsics.yaml"/>
   <rosparam command="load" file="$(find rviz_simulator)/config/$(arg camera_intrinsics_file)" />
   
   <!-- adding a command line arg for debug mode -->

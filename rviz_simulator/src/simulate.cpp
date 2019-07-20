@@ -34,11 +34,11 @@
  *  make room
  *  UML diagram
  *  Error checking and exception handling
- *  
+ *
  * ===========================================
- *  
+ *
  *  Make it impossible to move markers after first camera click
- *  Requires a removal and reinit of interactive markers upon first camera click
+ *      Requires a removal and reinit of interactive markers upon first camera click
  */
 
 #include <ros/ros.h>
@@ -101,11 +101,11 @@ rviz_simulator::CameraProperties loadCameraProperties(const ros::NodeHandle& n)
   camera_properties.fy = camera_matrix[4];
   camera_properties.cx = camera_matrix[2];
   camera_properties.cy = camera_matrix[5];
-  
+
   n.getParam("distortion_model", camera_properties.distortion_model);
   std::vector<double> distortion_coefficients;
   n.getParam("distortion_coefficients/data", distortion_coefficients);
-  if(camera_properties.distortion_model == "plumb_bob")
+  if (camera_properties.distortion_model == "plumb_bob")
   {
     camera_properties.k1 = distortion_coefficients[0];
     camera_properties.k2 = distortion_coefficients[1];
@@ -119,7 +119,7 @@ rviz_simulator::CameraProperties loadCameraProperties(const ros::NodeHandle& n)
   else
   {
     ROS_ERROR("Unknown camera distortion model specified!\n");
-  }  
+  }
   camera_properties.min_distance_between_target_corners = 30;
 
   return camera_properties;
@@ -190,7 +190,7 @@ int main(int argc, char** argv)
   geometry_msgs::Point starting_camera_postion = loadPoint(n, "starting_camera_positon");
   geometry_msgs::Quaternion starting_camera_orientation = loadOrientation(n, "starting_camera_orientation");
 
-  // accurate starting camera orientation
+  // setting starting camera orientation
   Eigen::Matrix3d rotation_matrix;
   rotation_matrix << -1, 0, 0, 0, 0, -1, 0, -1, 0;
   Eigen::Quaterniond q(rotation_matrix);
