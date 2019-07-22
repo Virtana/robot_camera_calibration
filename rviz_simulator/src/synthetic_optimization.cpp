@@ -30,16 +30,9 @@
  */
 
 /**
- * *** DELETE THIS BEFORE MERGING ***
- * 
- * http://www.lloydhughes.co.za/index.php/using-eigen-quaternions-and-ceres-solver/
- * 
- * TODO/NOTES:
- * refector milestone 1 camera code to be used in milestone 3
- * 
+ * TODO: 
  * 
  * templating the YAML-cpp readers to read automatically/refactoring the save methods
- * 
  * exception handling
  * 
  */
@@ -48,16 +41,44 @@
 #include <ros/package.h>
 
 #include "ceres/ceres.h"
+#include "ceres/rotation.h"
 
 #include <yaml-cpp/yaml.h>
 
 // getting a directory/file listing
 #include <dirent.h>
-// #include <filesystem>  // only seems to work for c++17
 
-#include "ceres/rotation.h"
+// for making directories
+#include <sys/stat.h>
+#include <sys/types.h>
 
 #include <Eigen/Dense>
+
+#define REFERENCE_T_TARGET_SIZE 6
+#define OBJ_POINTS_SIZE 3
+#define CORNER_POINTS_SIZE 2
+#define NUM_OBJ_POINTS 4
+#define NUM_CORNERS 4
+#define CAMERA_INTRINSICS_SIZE 12
+
+struct Target
+{
+  std::array<double, REFERENCE_T_TARGET_SIZE> world_T_target;
+  std::array<std::array<double, OBJ_POINTS_SIZE>, NUM_OBJ_POINTS> obj_points_in_target;
+};
+
+struct Detection
+{
+  int targetID;
+  std::array<std::array<double, CORNER_POINTS_SIZE>, NUM_CORNERS> corners;
+};
+
+struct Picture
+{
+  std::array<double, REFERENCE_T_TARGET_SIZE> world_T_camera;
+  std::array<double, REFERENCE_T_TARGET_SIZE> camera_T_world;
+  std::vector<Detection> detections;
+};
 
 
 struct ReProjectionResidual
@@ -76,45 +97,16 @@ struct ReProjectionResidual
   }
 
   template <typename T>
-  bool operator()(const T* const camera_extrinsics, const T* const intrinsics, T* residuals) 
+  bool operator()(const T* const camera_intrinsics, const T* const camera_T_world, const T* const world_T_target, T* residuals) 
   const
   {
     // for(int i = 0; i < 7; i++)
     //   ROS_INFO_STREAM("FROM CERES" << camera_extrinsics[i]);
     // ROS_INFO_STREAM(std::endl);
 
-    // mapping point in ROSWorld 
-    // Eigen::Matrix<T, 4, 1> point;
-    // point << T(this->point_in_ROSWorld[0]) , T(this->point_in_ROSWorld[1]) , T(this->point_in_ROSWorld[2]) , T(1);
-
-
-    // // mapping world_T_camera
-    // Eigen::Matrix<T, 4, 4> world_T_camera_transform;
-    // world_T_camera_transform = Eigen::Map<const Eigen::Matrix<T, 4, 4, Eigen::RowMajor>>(world_T_camera);
-
     // ROS_INFO_STREAM("FROM CERES" << (world_T_camera[0]));
     // // for(int i = 0; i < 16; i++)
     // //   ROS_INFO_STREAM(*(world_T_camera+i));
-
-    // // applying rotation and translation
-    // Eigen::Matrix<T, 4, 1> p;
-    // p = world_T_camera_transform.inverse() * point;
-
-    // camera_extrinsics
-    // [0, 1, 2, 3] = [w, i, j, k]
-    
-    // [4, 5, 6] = [x, y, z]
-    
-    
-    const T quarternion[4] = 
-    {
-      T(camera_extrinsics[0]),
-      T(camera_extrinsics[1]),
-      T(camera_extrinsics[2]),
-      T(camera_extrinsics[3])
-    };
-    T axis_angle[3];
-    ceres::QuaternionToAngleAxis(quarternion, axis_angle);
 
     const T point[3] = 
     {
@@ -125,36 +117,45 @@ struct ReProjectionResidual
     T p[3];
     
     // ROS_INFO_STREAM("CERES: x3_prime: " << point[0] << "y3_prime: " << point[1] << "z3_prime: " << point[2]);
+    // const T camera_T_world_angle_axis[3] = {-T(world_T_camera[0]), -T(world_T_camera[1]), -T(world_T_camera[2])};
+    // const T world_T_target_angle_axis[3] = {T(world_T_target[0]), T(world_T_target[1]), T(world_T_target[2])};
+    
+    ceres::AngleAxisRotatePoint(world_T_target, point, p);
+    p[0] += world_T_target[3];
+    p[1] += world_T_target[4];
+    p[2] += world_T_target[5];
 
-    // ceres::QuaternionRotatePoint(quarternion, point, p);
-    ceres::AngleAxisRotatePoint(axis_angle, point, p);
-    // ROS_INFO_STREAM("CERES: p0: " << p[0] << "p1: " << p[1] << "p2: " << p[2]);
+    const T point2[3] = {p[0], p[1], p[2]};
 
-    p[0] += camera_extrinsics[4];
-    p[1] += camera_extrinsics[5];
-    p[2] += camera_extrinsics[6];
+    ceres::AngleAxisRotatePoint(camera_T_world, point2, p);
+    p[0] += camera_T_world[3];
+    p[1] += camera_T_world[4];
+    p[2] += camera_T_world[5];
 
+    ROS_INFO_STREAM("CERES: p0: " << p[0] << "p1: " << p[1] << "p2: " << p[2]);
+
+  
     // scaling
     T x_prime = p[0] / p[2];
     T x_prime_squared = x_prime * x_prime;
     T y_prime = p[1] / p[2];
     T y_prime_squared = y_prime * y_prime;
 
-    // ROS_INFO_STREAM("CERES: x_prime: " << x_prime << "y_prime: " << y_prime);
+    ROS_INFO_STREAM("CERES: x_prime: " << x_prime << "y_prime: " << y_prime);
 
     // rectifying the camera distortion
-    T fx = intrinsics[0];
-    T fy = intrinsics[1];
-    T cx = intrinsics[2];
-    T cy = intrinsics[3];
-    T k1 = intrinsics[4];
-    T k2 = intrinsics[5];
-    T k3 = intrinsics[6];
-    T k4 = intrinsics[7];
-    T k5 = intrinsics[8];
-    T k6 = intrinsics[9];
-    T p1 = intrinsics[10];
-    T p2 = intrinsics[11];  
+    const T& fx = camera_intrinsics[0];
+    const T& fy = camera_intrinsics[1];
+    const T& cx = camera_intrinsics[2];
+    const T& cy = camera_intrinsics[3];
+    const T& k1 = camera_intrinsics[4];
+    const T& k2 = camera_intrinsics[5];
+    const T& p1 = camera_intrinsics[6];
+    const T& p2 = camera_intrinsics[7];
+    const T& k3 = camera_intrinsics[8];
+    const T& k4 = camera_intrinsics[9];
+    const T& k5 = camera_intrinsics[10];
+    const T& k6 = camera_intrinsics[11];  
 
     T r_raise_2 = x_prime_squared + y_prime_squared;
     T r_raise_4 = r_raise_2 * r_raise_2;
@@ -172,11 +173,11 @@ struct ReProjectionResidual
     T u = fx * x_double_prime + cx;
     T v = fy * y_double_prime + cy;
 
-    // negates the distortion
-    u = fx*x_prime + cx;
-    v = fy*y_prime + cy;
+    // // negates the distortion
+    // u = fx*x_prime + cx;
+    // v = fy*y_prime + cy;
 
-    // ROS_INFO_STREAM("FROM CERES: u: " << u << " v: " << v);
+    ROS_INFO_STREAM("FROM CERES: u: " << u << " v: " << v);
 
     // residuals
     residuals[0] = u - T(this->observed_pixel_coordinates[0]);
@@ -188,7 +189,7 @@ struct ReProjectionResidual
   // Factory to hide the construction of the CostFunction object from the client code.
   static ceres::CostFunction *Create(const double *observed_pixel_coordinates, const double *point_in_ROSWorld)
   {
-    return (new ceres::AutoDiffCostFunction<ReProjectionResidual, 2, 7, 12>(
+    return (new ceres::AutoDiffCostFunction<ReProjectionResidual, 3, CAMERA_INTRINSICS_SIZE, REFERENCE_T_TARGET_SIZE, REFERENCE_T_TARGET_SIZE>(
             new ReProjectionResidual(observed_pixel_coordinates, point_in_ROSWorld)));
   }
 
@@ -200,7 +201,7 @@ private:
 
 // print vector
 template <typename T>
-void print_vector(std::vector<T> data)
+void printVector(std::vector<T> data)
 {
   for (auto i = data.begin(); i != data.end(); i++)
   {
@@ -210,13 +211,49 @@ void print_vector(std::vector<T> data)
 
 }
 
+// print std::array
+template <typename T, std::size_t N>
+void printStdAarray(std::array<T, N> data)
+{
+  for (auto i = data.begin(); i != data.end(); i++)
+  {
+    ROS_INFO_STREAM(*i);
+  }
+  ROS_INFO_STREAM(std::endl);
 
-// gets the list of directories with the substring "detections"
-std::vector<std::string> get_detections(std::string package_path, unsigned char entity_type)
+}
+
+// print array
+template <typename T>
+void printArray(T array[], int n)
+{
+  for(int i = 0; i < n; i++)
+  {
+    ROS_INFO_STREAM(array[i]);
+  }
+  ROS_INFO_STREAM(std::endl);
+}
+
+void printTargets(std::vector<Target> targets)
+{
+  for(int i = 0; i < targets.size(); i++)
+  {
+    ROS_INFO_STREAM("targetID: " << i);
+    ROS_INFO_STREAM("world_T_target: "); printStdAarray(targets[i].world_T_target);
+    ROS_INFO_STREAM("obj_points_in_target: ");
+    for(int j = 0; j < targets[i].obj_points_in_target.size(); j++)
+    {
+      ROS_INFO_STREAM("Corner index: " << j); printStdAarray(targets[i].obj_points_in_target[j]);
+    }
+  }
+}
+
+// gets the list of detection entites (an entity is a directory or file) with the substring "detections"
+std::vector<std::string> getDetectionEntityNames(std::string directory_path, unsigned char entity_type)
 {
   std::vector<std::string> detection_entities;
   
-  DIR *dir = opendir(package_path.c_str());
+  DIR *dir = opendir(directory_path.c_str());
   struct dirent *entry = readdir(dir);
   while(entry != NULL)
   {
@@ -233,216 +270,228 @@ std::vector<std::string> get_detections(std::string package_path, unsigned char 
   return detection_entities;
 }
 
+std::array<double, 6> getReference_T_Target(const YAML::Node &node, std::string reference_T_target_name, bool inverse)
+{
+  std::array<double, 6> reference_T_target;
+  int coefficient = 1;
+  if(inverse)
+    coefficient = -1;
+
+  reference_T_target[0] = coefficient*node[reference_T_target_name]["rotation"][0].as<double>();
+  reference_T_target[1] = coefficient*node[reference_T_target_name]["rotation"][1].as<double>();
+  reference_T_target[2] = coefficient*node[reference_T_target_name]["rotation"][2].as<double>();
+  reference_T_target[3] = coefficient*node[reference_T_target_name]["translation"][0].as<double>();
+  reference_T_target[4] = coefficient*node[reference_T_target_name]["translation"][1].as<double>();
+  reference_T_target[5] = coefficient*node[reference_T_target_name]["translation"][2].as<double>();
+
+  return reference_T_target;
+}
+
+Detection getDetection(const YAML::Node &detection_node)
+{
+  Detection detection;
+  detection.targetID = detection_node["targetID"].as<int>();
+  for(YAML::const_iterator corner_iterator = detection_node["corners"].begin();
+      corner_iterator != detection_node["corners"].end();
+      ++corner_iterator)
+  {
+    int corner_index = corner_iterator->first.as<int>();
+    detection.corners[corner_index] = corner_iterator->second.as<std::array<double, CORNER_POINTS_SIZE>>();
+  }
+  return detection;
+}
+
+std::vector<Detection> getDetections(const YAML::Node &detections_node)
+{
+  std::vector<Detection> detections;
+  for(YAML::const_iterator detection_iterator = detections_node.begin();
+      detection_iterator != detections_node.end();
+      ++detection_iterator)
+  {
+    detections.push_back(getDetection(*detection_iterator));
+  }
+  return detections;
+}
+
+Picture getPicture(std::string picture_file_path)
+{
+  YAML::Node picture_node = YAML::LoadFile(picture_file_path);
+  if(!picture_node)
+  {
+    ROS_ERROR("Picture file read error.");
+  }
+
+  Picture picture;
+  picture.world_T_camera = getReference_T_Target(picture_node, "world_T_camera", false);
+  picture.camera_T_world = getReference_T_Target(picture_node, "world_T_camera", true);
+  picture.detections = getDetections(picture_node["detections"]);
+  return picture;
+}
+
+std::vector<Picture> getPictures(std::string detections_directory_path)
+{
+  // get list of detection files
+  std::vector<std::string> detection_file_names = getDetectionEntityNames(detections_directory_path, DT_REG);
+  // std::sort(detection_file_names.begin(), detection_file_names.end());
+
+  std::vector<Picture> pictures;
+  for(auto detection_file_name : detection_file_names)
+  {
+    // ROS_INFO_STREAM("FILE: " << detection_file_name.c_str());
+    pictures.push_back(getPicture(detections_directory_path+"/"+detection_file_name));
+  }
+  return pictures;
+}
+
+void printPictures(std::vector<Picture> pictures)
+{
+  for(int i = 0; i < pictures.size(); i++)
+  {
+    ROS_INFO_STREAM("Picture #" << i);
+    ROS_INFO("world_T_camera"); printStdAarray(pictures[i].world_T_camera);
+    for(Detection detection : pictures[i].detections)
+    {
+      ROS_INFO_STREAM("targetID: " << detection.targetID);
+      for(int j = 0; j < detection.corners.size(); j++)
+      {
+        ROS_INFO_STREAM("Corner #" << j << ": "); printStdAarray(detection.corners[j]);
+      }
+    }
+  }
+  ROS_INFO("\n");
+}
+
+std::vector<Target> getTargets(std::string targets_directory_path)
+{
+  YAML::Node targets_node = YAML::LoadFile(targets_directory_path);
+  if(!targets_node)
+  {
+    ROS_ERROR("Targets file read error.");
+  }
+
+  std::vector<Target> targets;
+
+  // iterating through all targets
+  for(YAML::const_iterator target_iterator = targets_node["targets"].begin();
+      target_iterator != targets_node["targets"].end();
+      ++target_iterator)
+  {    
+    const YAML::Node& target_node = *target_iterator;
+    Target target;
+
+    // world_T_target
+    target.world_T_target = getReference_T_Target(target_node, "world_T_target", false);
+
+    // obj_points_in_target
+    for(YAML::const_iterator obj_points_iterator = target_node["obj_points_in_target"].begin();
+        obj_points_iterator != target_node["obj_points_in_target"].end();
+        ++obj_points_iterator)
+    {
+      int corner_index = obj_points_iterator->first.as<int>();
+      target.obj_points_in_target[corner_index] = obj_points_iterator->second.as<std::array<double, OBJ_POINTS_SIZE>>();
+    }
+
+    targets.push_back(target);
+  }
+
+  return targets;
+}
+
+
+std::array<double, CAMERA_INTRINSICS_SIZE> getCameraIntrinsics(std::string camera_file_path)
+{
+  YAML::Node camera_node = YAML::LoadFile(camera_file_path);
+  if(!camera_node)
+  {
+    ROS_ERROR("Camera intrisics file read error.");
+  }
+
+  std::array<double, CAMERA_INTRINSICS_SIZE> camera_intrinsics;
+  // XXX: hardcoded for the plumb_bob distortion model
+  camera_intrinsics[0] = camera_node["camera_matrix"]["data"][0].as<double>();              // fx
+  camera_intrinsics[1] = camera_node["camera_matrix"]["data"][4].as<double>();              // fy
+  camera_intrinsics[2] = camera_node["camera_matrix"]["data"][2].as<double>();              // cx
+  camera_intrinsics[3] = camera_node["camera_matrix"]["data"][5].as<double>();              // cy
+
+  // plumb_bob distortions
+  camera_intrinsics[4] = camera_node["distortion_coefficients"]["data"][0].as<double>();    // k1
+  camera_intrinsics[5] = camera_node["distortion_coefficients"]["data"][1].as<double>();    // k2
+  camera_intrinsics[6] = camera_node["distortion_coefficients"]["data"][2].as<double>();    // p1
+  camera_intrinsics[7] = camera_node["distortion_coefficients"]["data"][3].as<double>();    // p2
+  camera_intrinsics[8] = camera_node["distortion_coefficients"]["data"][4].as<double>();    // k3
+  camera_intrinsics[9] = 0;                                                                 // k4
+  camera_intrinsics[10] = 0;                                                                // k5
+  camera_intrinsics[11] = 0;                                                                // k6
+
+  return camera_intrinsics;
+}
+
+
+std::string getDetectionsDirectoryPath(ros::NodeHandle &n)
+{
+  // checking if the detections directory name was passed as a cmd line arg
+  std::string detections_directory_name;
+  if(!n.getParam("dir_name", detections_directory_name))
+  {
+    ROS_ERROR("Detections directory name not specified.\n");
+    exit(-1);
+  }
+
+  // checking existance of detections directory
+  std::string package_path = ros::package::getPath("rviz_simulator");
+  std::string detections_directory_path = package_path+"/detections/"+detections_directory_name;
+  struct stat info;
+  if (stat(detections_directory_path.c_str(), &info) != 0)
+  {
+    ROS_ERROR("Detections directory read error.\n");
+    exit(-1);
+  }
+  
+  return detections_directory_path;
+}
+
 
 int main(int argc, char **argv)
 {
 
   
   ros::init(argc, argv, "synthetic_optimization");
-  ros::NodeHandle n;
+  ros::NodeHandle n("~");
+
+  std::string detections_directory_path = getDetectionsDirectoryPath(n);
+
+  std::array<double, CAMERA_INTRINSICS_SIZE> camera_intrinsics = getCameraIntrinsics(detections_directory_path+"/camera.yaml");
+  std::array<double, CAMERA_INTRINSICS_SIZE> initial_intrinsics = camera_intrinsics;
+  // printStdAarray(camera_intrinsics);
+  
+  std::vector<Target> targets = getTargets(detections_directory_path+"/targets.yaml");
+  // printTargets(targets);
+
+  std::vector<Picture> pictures = getPictures(detections_directory_path);
+  // printPictures(pictures);
 
   ceres::Problem problem;
 
-  std::string package_path = ros::package::getPath("rviz_simulator");
-
-  // getting camera intrinsics
-  YAML::Node config_node = YAML::LoadFile(package_path+"/config/initialize_simulator.yaml");
-  std::string camera_intrinsics_file = config_node["camera_intrinsics_file"].as<std::string>();
-  YAML::Node camera_node = YAML::LoadFile(package_path+"/config/"+camera_intrinsics_file);
-
-  const unsigned int NUM_INTRINSICS = 12;
-  std::array<double, NUM_INTRINSICS> intrinsics = 
+  for(int p = 0; p < pictures.size(); p++)
   {
-    camera_node["fx"].as<double>(),
-    camera_node["fy"].as<double>(),
-    camera_node["cx"].as<double>(),
-    camera_node["cy"].as<double>(),
-    camera_node["k1"].as<double>(),
-    camera_node["k2"].as<double>(),
-    camera_node["k3"].as<double>(),
-    camera_node["k4"].as<double>(),
-    camera_node["k5"].as<double>(),
-    camera_node["k6"].as<double>(),
-    camera_node["p1"].as<double>(),
-    camera_node["p2"].as<double>(),
-  };
-  std::array<double, NUM_INTRINSICS> initial_intrinsics = intrinsics;   // to compare with later
-
-  // get fiducial target size
-  const double TARGET_SCALE = config_node["target_scale"].as<double>();
-
-  // getting extrinsics, observed_pixel_points, points_in_ROSWorld
-  std::vector<std::array<double, 7>> camera_extrinsics;  // vector of vectors (16 elements)
-  camera_extrinsics.reserve(1000); // ensures the vector memory addresses are not reallocated durind execution
-
-
-  // std::string file_path = package_path+"/detections_1562784215/detections_0.yaml";
-
-  // getting vector of detection directories
-  std::vector<std::string> detection_directories = get_detections(package_path, DT_DIR);
-  // print_vector(detection_directories);
-
-  // iterating through the detection directories
-  for(auto detection_directory = detection_directories.begin(); detection_directory != detection_directories.end(); ++detection_directory)
-  {
-    // iterating through the detection files in given detection directory
-    std::vector<std::string> detection_file_names = get_detections(package_path+"/"+*detection_directory, DT_REG);
-    for(auto detection_file_name = detection_file_names.begin(); 
-        detection_file_name != detection_file_names.end();
-        ++detection_file_name)
+    for(int d = 0; d < pictures[p].detections.size(); d++)
     {
-      std::string detection_file_path = package_path+"/"+*detection_directory+"/"+*detection_file_name;
-      ROS_INFO_STREAM(detection_file_path);
+      for(int c = 0; c < pictures[p].detections[d].corners.size(); c++)
+      { 
+        ceres::CostFunction *cost_function 
+          = ReProjectionResidual::Create(
+              pictures[p].detections[d].corners[c].data(), 
+              targets[pictures[p].detections[d].targetID].obj_points_in_target[c].data());
 
-      // load yaml file
-      YAML::Node detection_file_node = YAML::LoadFile(detection_file_path);
-
-      // reading camera extrinsics
-      std::vector<double> camera_pose = detection_file_node["camera"]["pose"].as<std::vector<double>>();
-      // std::array<double, 16> camera_pose_array;
-      // std::copy_n(camera_pose.begin(), 16, camera_pose_array.begin());
-      // world_T_camera.push_back(camera_pose_array);
-
-      // double *array = &camera_pose_array[0];
-      // ROS_INFO_STREAM("BACK " << array[0]);
-
-      // transform conversion
-      Eigen::Matrix<double, 4, 4> world_T_camera_matrix;
-      world_T_camera_matrix = Eigen::Map<const Eigen::Matrix<double, 4, 4, Eigen::RowMajor>>(camera_pose.data());
-      Eigen::Affine3d world_T_camera_affine3d;
-      world_T_camera_affine3d = world_T_camera_matrix;
-
-      // Eigen::Matrix3d world_T_camera_rotation_matrix;
-      // world_T_camera_rotation_matrix = world_T_camera_affine3d.rotation();
-      // Eigen::Quaterniond world_T_camera_quarternion;
-      // world_T_camera_quarternion = world_T_camera_rotation_matrix;
-      // Eigen::Quaterniond camera_T_world_quarternion;
-      // camera_T_world_quarternion = world_T_camera_quarternion.inverse();
-      // camera_T_world_quarternion.normalize();
-
-      // Eigen::Vector3d world_T_camera_translation;
-      // world_T_camera_translation = world_T_camera_affine3d.translation();
-      // Eigen::Vector3d camera_T_world_translation;
-      // camera_T_world_translation = -world_T_camera_translation;
-
-      // std::array<double, 7> camera_pose_array;
-      // camera_pose_array[0] = camera_T_world_quarternion.w();
-      // camera_pose_array[1] = camera_T_world_quarternion.x();
-      // camera_pose_array[2] = camera_T_world_quarternion.y();
-      // camera_pose_array[3] = camera_T_world_quarternion.z();
-      // camera_pose_array[4] = camera_T_world_translation.x();
-      // camera_pose_array[5] = camera_T_world_translation.y();
-      // camera_pose_array[6] = camera_T_world_translation.z();
-
-      // camera_extrinsics.push_back(camera_pose_array);
-      // double *array = camera_extrinsics.back().data();
-      // for(int i = 0; i < 7; i++)
-      //   ROS_INFO_STREAM("EXTRINSICS: " << array[i]);
-
-      // for(int i = 0; i < 7; i++)
-      //   ROS_INFO_STREAM("FROM ROS" << camera_pose_array[i]);   
-
-      // print_vector(camera_pose);
-      // for(int i = 0; i < camera_pose_array.size(); i++)
-      // ROS_INFO_STREAM(&camera_pose_array[0]);
-
-      // iterating through targets in the detection file
-      for(YAML::const_iterator target = detection_file_node["detections"].begin(); 
-          target != detection_file_node["detections"].end(); 
-          ++target)
-      {
-        const YAML::Node& target_node = *target;
-        std::string target_id = target_node["TargetID"].as<std::string>();
-        ROS_INFO_STREAM("target id: " << target_id);
-
-        // get target pose in ROSWorld (world_T_target)
-        std::vector<double> target_pose = target_node["pose"].as<std::vector<double>>();
-        Eigen::Matrix4d world_T_target_matrix;
-        world_T_target_matrix = Eigen::Map<Eigen::Matrix<double,4, 4, Eigen::RowMajor> >(target_pose.data());
-        Eigen::Affine3d world_T_target_affine3d;
-        world_T_target_affine3d = world_T_target_matrix;
-
-        Eigen::Affine3d camera_T_target_affine3d;
-        camera_T_target_affine3d = world_T_camera_affine3d.inverse()*world_T_target_affine3d;
-
-        Eigen::Matrix3d camera_T_target_rotation_matrix;
-        camera_T_target_rotation_matrix = camera_T_target_affine3d.rotation();
-        Eigen::Quaterniond camera_T_target_quarternion;
-        camera_T_target_quarternion = camera_T_target_rotation_matrix;
-        // Eigen::Quaterniond camera_T_world_quarternion;
-        // camera_T_world_quarternion = camera_T_target_quarternion.inverse();
-        // camera_T_world_quarternion.normalize();
-
-        Eigen::Vector3d camera_T_target_translation;
-        camera_T_target_translation = camera_T_target_affine3d.translation();
-        Eigen::Vector3d camera_T_world_translation;
-        camera_T_world_translation = camera_T_target_translation;
-
-
-        std::array<double, 7> camera_pose_array;
-        camera_pose_array[0] = camera_T_target_quarternion.w();
-        camera_pose_array[1] = camera_T_target_quarternion.x();
-        camera_pose_array[2] = camera_T_target_quarternion.y();
-        camera_pose_array[3] = camera_T_target_quarternion.z();
-        camera_pose_array[4] = camera_T_target_translation.x();
-        camera_pose_array[5] = camera_T_target_translation.y();
-        camera_pose_array[6] = camera_T_target_translation.z();
-
-        camera_extrinsics.push_back(camera_pose_array);
-
-        for(int i = 0; i < 7; i++)
-          ROS_INFO_STREAM("FROM ROS" << camera_pose_array[i]);   
-        
-        // set vector of corner transforms
-        // *** CODE FROM CAMERA.CPP  ***
-        Eigen::Vector4d c1, c2, c3, c4;
-        c1 << 0, 0, 0, 1;
-        c2 << TARGET_SCALE, 0, 0, 1;
-        c3 << TARGET_SCALE, 0, TARGET_SCALE, 1;
-        c4 << 0, 0, TARGET_SCALE, 1;
-        std::vector<Eigen::Vector4d> corners4d;
-        corners4d.push_back(c1);
-        corners4d.push_back(c2);
-        corners4d.push_back(c3);
-        corners4d.push_back(c4);
-        // *** CODE FROM CAMERA.CPP  ***
-
-
-        // iterating through the 4 corners of a target
-        int i = 0;
-        for(YAML::const_iterator corner = target_node["corners"].begin(); corner != target_node["corners"].end(); ++corner)
-        {
-          int corner_id = corner->first.as<int>();
-          const YAML::Node& coordinates_node = corner->second;
-          double u = coordinates_node[0].as<double>();
-          double v = coordinates_node[1].as<double>();
-          double observed_pixel_coordinates[2] = {u, v};
-          ROS_INFO_STREAM("u: " << u << ", v: " << v);
-
-          double point_in_target_frame[3] = 
-          {
-            corners4d[i][0],
-            corners4d[i][1],
-            corners4d[i][2],
-          };
-
-          ROS_INFO_STREAM("ROS POINT: x: " << point_in_target_frame[0] << " y: " << point_in_target_frame[1] << " z: " << point_in_target_frame[2]);
-
-          // add residual block
-          ceres::CostFunction* cost_function = ReProjectionResidual::Create(observed_pixel_coordinates, point_in_target_frame);
-          problem.AddResidualBlock(cost_function, NULL, camera_extrinsics.back().data(), intrinsics.data());
-
-          i++;
-        }
-        // ceres::LocalParameterization *quaternion_parameterization = new ceres::QuaternionParameterization;
-        // problem.SetParameterization()
-      } // end iterating through targets in the detection file
-    } // end iterating through the detection files in given detection directory
-  } // end iterating through the detection directories
-
-
-
-
+        problem.AddResidualBlock(
+              cost_function, 
+              NULL, 
+              camera_intrinsics.data(), 
+              pictures[p].camera_T_world.data(), 
+              targets[pictures[p].detections[d].targetID].world_T_target.data());
+      }
+    }
+  }
 
   ceres::Solver::Options options;
   options.linear_solver_type = ceres::DENSE_SCHUR;
@@ -454,9 +503,9 @@ int main(int argc, char **argv)
   std::cout << "\n";
 
   ROS_INFO_STREAM("INITIAL\t\tFINAL");
-  for(int i = 0; i < intrinsics.size(); i++)
+  for(int i = 0; i < camera_intrinsics.size(); i++)
   {
-    ROS_INFO_STREAM(initial_intrinsics[i] << "\t\t" << intrinsics[i]);
+    ROS_INFO_STREAM(initial_intrinsics[i] << "\t\t" << camera_intrinsics[i]);
   }
 
   return 0;

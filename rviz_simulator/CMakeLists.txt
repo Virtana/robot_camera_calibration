@@ -225,7 +225,6 @@ target_link_libraries(synthetic_optimization
 # target_link_libraries(${PROJECT_NAME} yaml-cpp)
 
 
-
 # add_dependencies()
 
 #############

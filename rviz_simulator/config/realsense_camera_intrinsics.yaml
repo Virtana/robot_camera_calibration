@@ -1,20 +1,22 @@
-name: "Realsense Camera (Camera)"
-
-width: 1280
-height: 720
-fx: 468.456
-fy: 468.456
-cx: 320
-cy: 240
-near_clip: 0.1
-far_clip: 5.0
-
-# distortions
-k1: 0.0
-k2: 0.0
-k3: 0.0
-k4: 0.0
-k5: 0.0
-k6: 0.0
-p1: 0.0
-p2: 0.0
+image_width: 1280
+image_height: 720
+camera_name: "Realsense Camera (Camera)"
+near_clip: 0.1      # remove this
+far_clip: 5         # remove this
+camera_matrix:
+  rows: 3
+  cols: 3
+  data: [468.456, 0, 320, 0, 468.456, 240, 0, 0, 1]
+distortion_model: "plumb_bob"
+distortion_coefficients:
+  rows: 1
+  cols: 5
+  data: [0, 0, 0, 0, 0]
+rectification_matrix:
+  rows: 3
+  cols: 3
+  data: [1, 0, 0, 0, 1, 0, 0, 0, 1]
+projection_matrix:
+  rows: 3
+  cols: 4
+  data: [468.456, 0, 320, 0, 0, 468.456, 240, 0, 0, 0, 1, 0]

@@ -32,10 +32,13 @@
 /*  TODO:
  *  make wall
  *  make room
- *  publish transforms to yaml
- *  neaten up includes, cmake, packages
  *  UML diagram
  *  Error checking and exception handling
+ *
+ * ===========================================
+ *
+ *  Make it impossible to move markers after first camera click
+ *      Requires a removal and reinit of interactive markers upon first camera click
  */
 
 #include <ros/ros.h>
@@ -84,34 +87,42 @@ geometry_msgs::Quaternion loadOrientation(const ros::NodeHandle& n, const std::s
   return q;
 }
 
-/// Loads rviz_simulator::CameraIntrinsics from ROS parameter server
-rviz_simulator::CameraIntrinsics loadCameraIntrinsics(const ros::NodeHandle& n)
+/// Loads rviz_simulator::CameraProperties from ROS parameter server
+rviz_simulator::CameraProperties loadCameraProperties(const ros::NodeHandle& n)
 {
-  rviz_simulator::CameraIntrinsics intrinsics;
-  n.getParam("width", intrinsics.image_width);
-  n.getParam("height", intrinsics.image_height);
-  n.getParam("fx", intrinsics.fx);
-  n.getParam("fy", intrinsics.fy);
-  n.getParam("cx", intrinsics.cx);
-  n.getParam("cy", intrinsics.cy);
-  n.getParam("near_clip", intrinsics.min_distance_between_camera_and_target);
-  n.getParam("far_clip", intrinsics.max_distance_between_camera_and_target);
-  return intrinsics;
-}
+  rviz_simulator::CameraProperties camera_properties;
+  n.getParam("image_width", camera_properties.image_width);
+  n.getParam("image_height", camera_properties.image_height);
+  n.getParam("camera_name", camera_properties.camera_name);
 
-/// Loads rviz_simulator::CameraDistortions from ROS parameter server
-rviz_simulator::CameraDistortions loadCameraDistortions(const ros::NodeHandle& n)
-{
-  rviz_simulator::CameraDistortions distortions;
-  n.getParam("k1", distortions.k1);
-  n.getParam("k2", distortions.k2);
-  n.getParam("k3", distortions.k3);
-  n.getParam("k4", distortions.k4);
-  n.getParam("k5", distortions.k5);
-  n.getParam("k6", distortions.k6);
-  n.getParam("p1", distortions.p1);
-  n.getParam("p2", distortions.p2);
-  return distortions;
+  std::vector<double> camera_matrix;
+  n.getParam("camera_matrix/data", camera_matrix);
+  camera_properties.fx = camera_matrix[0];
+  camera_properties.fy = camera_matrix[4];
+  camera_properties.cx = camera_matrix[2];
+  camera_properties.cy = camera_matrix[5];
+
+  n.getParam("distortion_model", camera_properties.distortion_model);
+  std::vector<double> distortion_coefficients;
+  n.getParam("distortion_coefficients/data", distortion_coefficients);
+  if (camera_properties.distortion_model == "plumb_bob")
+  {
+    camera_properties.k1 = distortion_coefficients[0];
+    camera_properties.k2 = distortion_coefficients[1];
+    camera_properties.k3 = distortion_coefficients[4];
+    camera_properties.k4 = 0;
+    camera_properties.k5 = 0;
+    camera_properties.k6 = 0;
+    camera_properties.p1 = distortion_coefficients[2];
+    camera_properties.p2 = distortion_coefficients[3];
+  }
+  else
+  {
+    ROS_ERROR("Unknown camera distortion model specified!\n");
+  }
+  camera_properties.min_distance_between_target_corners = 30;
+
+  return camera_properties;
 }
 
 /// Makes a row of targets
@@ -175,12 +186,11 @@ int main(int argc, char** argv)
                     starting_target_position, starting_target_orientation, blue, grey);
 
   /// adding camera
-  rviz_simulator::CameraIntrinsics camera_intrinsics = loadCameraIntrinsics(n);
-  rviz_simulator::CameraDistortions camera_distortions = loadCameraDistortions(n);
+  rviz_simulator::CameraProperties camera_properties = loadCameraProperties(n);
   geometry_msgs::Point starting_camera_postion = loadPoint(n, "starting_camera_positon");
   geometry_msgs::Quaternion starting_camera_orientation = loadOrientation(n, "starting_camera_orientation");
 
-  // accurate starting camera orientation
+  // setting starting camera orientation
   Eigen::Matrix3d rotation_matrix;
   rotation_matrix << -1, 0, 0, 0, 0, -1, 0, -1, 0;
   Eigen::Quaterniond q(rotation_matrix);
@@ -189,7 +199,7 @@ int main(int argc, char** argv)
 
   rviz_simulator::Camera camera(world_frame_id, "camera", starting_camera_postion, starting_camera_orientation, orange,
                                 0.2, g_interactive_marker_server, visualization_msgs::InteractiveMarkerControl::BUTTON,
-                                camera_intrinsics, camera_distortions);
+                                camera_properties);
 
   g_interactive_marker_server->applyChanges();
   ros::spin();
