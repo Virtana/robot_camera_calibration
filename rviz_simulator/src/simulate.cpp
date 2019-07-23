@@ -174,7 +174,13 @@ int main(int argc, char** argv)
 
   /// setting marker position in ROSWorld
   geometry_msgs::Point starting_target_position = loadPoint(n, "starting_target_position");
-  geometry_msgs::Quaternion starting_target_orientation = loadOrientation(n, "starting_target_orientation");
+  // geometry_msgs::Quaternion starting_target_orientation = loadOrientation(n, "starting_target_orientation");
+  geometry_msgs::Quaternion starting_target_orientation;
+  Eigen::Matrix3d rotation_matrix;
+  rotation_matrix << -1, 0, 0, 0, 0, 1, 0, 1, 0;
+  Eigen::Quaterniond q;
+  q = rotation_matrix;
+  tf::quaternionEigenToMsg(q, starting_target_orientation);
 
   /// making a line of targets and adding to server
   int num_targets;
@@ -188,17 +194,17 @@ int main(int argc, char** argv)
   /// adding camera
   rviz_simulator::CameraProperties camera_properties = loadCameraProperties(n);
   geometry_msgs::Point starting_camera_postion = loadPoint(n, "starting_camera_positon");
-  geometry_msgs::Quaternion starting_camera_orientation = loadOrientation(n, "starting_camera_orientation");
+  // geometry_msgs::Quaternion starting_camera_orientation = loadOrientation(n, "starting_camera_orientation");
 
   // setting starting camera orientation
-  Eigen::Matrix3d rotation_matrix;
+  geometry_msgs::Quaternion starting_camera_orientation;
   rotation_matrix << -1, 0, 0, 0, 0, -1, 0, -1, 0;
-  Eigen::Quaterniond q(rotation_matrix);
+  q = rotation_matrix;
   ROS_INFO_STREAM("Quaternion: " << q.x() << " " << q.y() << " " << q.z() << " " << q.w() << "\n");
   tf::quaternionEigenToMsg(q, starting_camera_orientation);
 
   rviz_simulator::Camera camera(world_frame_id, "camera", starting_camera_postion, starting_camera_orientation, orange,
-                                0.2, g_interactive_marker_server, visualization_msgs::InteractiveMarkerControl::BUTTON,
+                                0.2, 0.1, g_interactive_marker_server, visualization_msgs::InteractiveMarkerControl::BUTTON,
                                 camera_properties);
 
   g_interactive_marker_server->applyChanges();
