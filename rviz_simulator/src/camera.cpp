@@ -48,7 +48,7 @@ Eigen::MatrixXd CameraProperties::getCameraMatrix()
 Camera::Camera(const std::string marker_frame_id, const std::string marker_name,
                const geometry_msgs::Point marker_position_in_ROSWorld,
                const geometry_msgs::Quaternion marker_orientation_in_ROSWorld,
-               const std_msgs::ColorRGBA marker_color_RGBA, double marker_scale,
+               const std_msgs::ColorRGBA marker_color_RGBA, double marker_scale, double target_scale,
                boost::shared_ptr<interactive_markers::InteractiveMarkerServer> g_interactive_marker_server,
                unsigned int interaction_mode, CameraProperties camera_properties)
   : Target(marker_frame_id, marker_name, marker_position_in_ROSWorld, marker_orientation_in_ROSWorld, marker_color_RGBA,
@@ -57,8 +57,8 @@ Camera::Camera(const std::string marker_frame_id, const std::string marker_name,
   this->camera_properties_ = camera_properties;
   this->camera_properties_.populateCameraMatrix();
 
-  this->target_x_length_ = marker_scale;
-  this->target_y_length_ = marker_scale;
+  this->target_x_length_ = target_scale;
+  this->target_y_length_ = target_scale;
   this->initObjPointsInTarget();
 
   // adding a shutter release button to the camera
@@ -83,10 +83,10 @@ Camera::~Camera()
 void Camera::initObjPointsInTarget()
 {
   Eigen::Vector4d c0, c1, c2, c3;
-  c0 << -this->target_x_length_ / 2, 0, -this->target_y_length_ / 2, 1;  // old c0
-  c3 << -this->target_x_length_ / 2, 0, this->target_y_length_ / 2, 1;   // old c1
-  c2 << this->target_x_length_ / 2, 0, this->target_y_length_ / 2, 1;    // old c2
-  c1 << this->target_x_length_ / 2, 0, -this->target_y_length_ / 2, 1;   // old c3
+  c0 << -this->target_x_length_/ 2, -this->target_y_length_/ 2, 0, 1;  // old c0
+  c3 << -this->target_x_length_/ 2, this->target_y_length_/ 2, 0, 1;   // old c1
+  c2 << this->target_x_length_/ 2, this->target_y_length_/ 2, 0, 1;    // old c2
+  c1 << this->target_x_length_/ 2, -this->target_y_length_/ 2, 0, 1;   // old c3
 
   this->obj_points_in_target_.push_back(c0);
   this->obj_points_in_target_.push_back(c1);
