@@ -221,7 +221,7 @@ void Camera::takePicture()
         for (int i = 0; i < corners.size(); i++)
         {
           detections_out << YAML::Key << i;
-          detections_out << YAML::Value << YAML::BeginSeq << int(corners[i][0]) << int(corners[i][1]) << YAML::EndSeq;
+          detections_out << YAML::Value << YAML::BeginSeq << corners[i][0] << corners[i][1] << YAML::EndSeq;
         }
         detections_out << YAML::EndMap;  // corners
         detections_out << YAML::EndMap;  // target

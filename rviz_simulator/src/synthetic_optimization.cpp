@@ -97,7 +97,7 @@ struct ReProjectionResidual
   }
 
   template <typename T>
-  bool operator()(const T* const camera_intrinsics, const T* const camera_T_world, const T* const world_T_target, T* residuals) 
+  bool operator()(const T* const camera_intrinsics, const T* const world_T_camera, const T* const world_T_target, T* residuals) 
   const
   {
     // for(int i = 0; i < 7; i++)
@@ -116,25 +116,25 @@ struct ReProjectionResidual
     };
     T p[3];
     
-    ROS_INFO_STREAM("CERES: x: " << point[0] << "y: " << point[1] << "z: " << point[2]);
-    // const T world_T_target_angle_axis[3] = {T(world_T_target[0]), T(world_T_target[1]), T(world_T_target[2])};
+    // ROS_INFO_STREAM("CERES: x: " << point[0] << "\ny: " << point[1] << "\nz: " << point[2]);
+    const T world_T_target_angle_axis[3] = {T(world_T_target[0]), T(world_T_target[1]), T(world_T_target[2])};
 
-    ceres::AngleAxisRotatePoint(world_T_target, point, p);
+    ceres::AngleAxisRotatePoint(world_T_target_angle_axis, point, p);
     p[0] += world_T_target[3];
     p[1] += world_T_target[4];
     p[2] += world_T_target[5];
 
-    ROS_INFO_STREAM("CERES: p0: " << p[0] << "p1: " << p[1] << "p2: " << p[2]);
+    // ROS_INFO_STREAM("CERES AFTER w_T_t: p0: " << p[0] << "\np1: " << p[1] << "\np2: " << p[2]);
 
 
     const T point2[3] = {p[0], p[1], p[2]};
 
-    // const T camera_T_world_angle_axis[3] = {-T(camera_T_world[0]), -T(camera_T_world[1]), -T(camera_T_world[2])};
-    ceres::AngleAxisRotatePoint(camera_T_world, point2, p);
+    const T camera_T_world_angle_axis[3] = {T(world_T_camera[0]), T(world_T_camera[1]), T(world_T_camera[2])};
+    ceres::AngleAxisRotatePoint(camera_T_world_angle_axis, point2, p);
     
-    p[0] += camera_T_world[3];
-    p[1] += camera_T_world[4];
-    p[2] += camera_T_world[5];
+    p[0] += -world_T_camera[3];
+    p[1] += -world_T_camera[4];
+    p[2] += world_T_camera[5];
 
     // trying eigen
     // T world_T_target_quarternion[4];
@@ -143,7 +143,7 @@ struct ReProjectionResidual
     // Eigen::Quaternion<T> world_T_target_eigen_quarternion(world_T_target_quarternion[0],world_T_target_quarternion[1],world_T_target_quarternion[2],world_T_target_quarternion[3]);    
 
 
-    ROS_INFO_STREAM("CERES: p0: " << p[0] << "p1: " << p[1] << "p2: " << p[2]);
+    // ROS_INFO_STREAM("CERES after c_T_w: p0: " << p[0] << "\np1: " << p[1] << "\np2: " << p[2]);
 
   
     // scaling
@@ -152,7 +152,7 @@ struct ReProjectionResidual
     T y_prime = p[1] / p[2];
     T y_prime_squared = y_prime * y_prime;
 
-    ROS_INFO_STREAM("CERES: x_prime: " << x_prime << "y_prime: " << y_prime);
+    // ROS_INFO_STREAM("CERES: x_prime: " << x_prime << "\ny_prime: " << y_prime);
 
     // rectifying the camera distortion
     const T& fx = camera_intrinsics[0];
@@ -188,11 +188,13 @@ struct ReProjectionResidual
     // u = fx*x_prime + cx;
     // v = fy*y_prime + cy;
 
-    ROS_INFO_STREAM("FROM CERES: u: " << u << " v: " << v);
+    // ROS_INFO_STREAM("FROM CERES: u: " << u << "\nv: " << v);
 
     // residuals
     residuals[0] = u - T(this->observed_pixel_coordinates[0]);
     residuals[1] = v - T(this->observed_pixel_coordinates[1]);
+
+    // ROS_INFO_STREAM("FROM CERES: r_0: " << residuals[0] << "\nr_1: " << residuals[1]);
 
     return true;
   }
@@ -200,7 +202,7 @@ struct ReProjectionResidual
   // Factory to hide the construction of the CostFunction object from the client code.
   static ceres::CostFunction *Create(const double *observed_pixel_coordinates, const double *obj_point_in_target)
   {
-    return (new ceres::AutoDiffCostFunction<ReProjectionResidual, 3, CAMERA_INTRINSICS_SIZE, REFERENCE_T_TARGET_SIZE, REFERENCE_T_TARGET_SIZE>(
+    return (new ceres::AutoDiffCostFunction<ReProjectionResidual, 2, CAMERA_INTRINSICS_SIZE, REFERENCE_T_TARGET_SIZE, REFERENCE_T_TARGET_SIZE>(
             new ReProjectionResidual(observed_pixel_coordinates, obj_point_in_target)));
   }
 
@@ -287,16 +289,20 @@ std::array<double, 6> getReference_T_Target(const YAML::Node &node, std::string 
   
   if(inverse)
   {
-    std::array<double, 3> rodrigues_angle_axis = node[reference_T_target_name]["rotation"].as<std::array<double, 3>>();
-    double rotation_array[9];
-    ceres::AngleAxisToRotationMatrix(rodrigues_angle_axis.data(), rotation_array);
-    Eigen::Matrix3d rotation_matrix = Eigen::Map<Eigen::Matrix3d>(rotation_array);
-    rotation_matrix = rotation_matrix.inverse().eval();
-    ceres::RotationMatrixToAngleAxis(rotation_matrix.data(), rodrigues_angle_axis.data());
+    // std::array<double, 3> rodrigues_angle_axis = node[reference_T_target_name]["rotation"].as<std::array<double, 3>>();
+    // double rotation_array[9];
+    // ceres::AngleAxisToRotationMatrix(rodrigues_angle_axis.data(), rotation_array);
+    // Eigen::Matrix3d rotation_matrix = Eigen::Map<Eigen::Matrix3d>(rotation_array);
+    // rotation_matrix = rotation_matrix.inverse().eval();
+    // ceres::RotationMatrixToAngleAxis(rotation_matrix.data(), rodrigues_angle_axis.data());
 
-    reference_T_target[0] = rodrigues_angle_axis[0];
-    reference_T_target[1] = rodrigues_angle_axis[1];
-    reference_T_target[2] = rodrigues_angle_axis[2];
+    // reference_T_target[0] = rodrigues_angle_axis[0];
+    // reference_T_target[1] = rodrigues_angle_axis[1];
+    // reference_T_target[2] = rodrigues_angle_axis[2];
+
+    reference_T_target[0] = -node[reference_T_target_name]["rotation"][0].as<double>();
+    reference_T_target[1] = -node[reference_T_target_name]["rotation"][1].as<double>();
+    reference_T_target[2] = -node[reference_T_target_name]["rotation"][2].as<double>();
 
     reference_T_target[3] = -1*node[reference_T_target_name]["translation"][0].as<double>();
     reference_T_target[4] = -1*node[reference_T_target_name]["translation"][1].as<double>();
@@ -366,7 +372,7 @@ std::vector<Picture> getPictures(std::string detections_directory_path)
   std::vector<Picture> pictures;
   for(auto detection_file_name : detection_file_names)
   {
-    // ROS_INFO_STREAM("FILE: " << detection_file_name.c_str());
+    ROS_INFO_STREAM("FILE: " << detection_file_name.c_str());
     pictures.push_back(getPicture(detections_directory_path+"/"+detection_file_name));
   }
   return pictures;
@@ -481,6 +487,19 @@ std::string getDetectionsDirectoryPath(ros::NodeHandle &n)
 }
 
 
+// detections directory: detections_1563919027
+// [ INFO] [1563993274.518412971]: FILE: detections_6.yaml
+// [ INFO] [1563993274.518854607]: FILE: detections_5.yaml
+// [ INFO] [1563993274.519459853]: FILE: detections_7.yaml
+// [ INFO] [1563993274.519925754]: FILE: detections_1.yaml
+// [ INFO] [1563993274.520442703]: FILE: detections_4.yaml
+// [ INFO] [1563993274.520835566]: FILE: detections_8.yaml
+// [ INFO] [1563993274.521130784]: FILE: detections_2.yaml
+// [ INFO] [1563993274.521421798]: FILE: detections_3.yaml
+// [ INFO] [1563993274.521796625]: FILE: detections_0.yaml
+
+
+
 int main(int argc, char **argv)
 {
 
@@ -502,40 +521,51 @@ int main(int argc, char **argv)
 
   ceres::Problem problem;
 
-  ceres::CostFunction *cost_function 
-          = ReProjectionResidual::Create(
-              pictures[30].detections[1].corners[0].data(), 
-              targets[pictures[30].detections[1].targetID].obj_points_in_target[0].data());
-
-  problem.AddResidualBlock(
-              cost_function, 
-              NULL, 
-              camera_intrinsics.data(), 
-              pictures[30].camera_T_world.data(), 
-              targets[pictures[30].detections[1].targetID].world_T_target.data());
-  
-
-
-  // for(int p = 0; p < pictures.size(); p++)
-  // {
-  //   for(int d = 0; d < pictures[p].detections.size(); d++)
-  //   {
-  //     for(int c = 0; c < pictures[p].detections[d].corners.size(); c++)
-  //     { 
-  //       ceres::CostFunction *cost_function 
+  // ceres::CostFunction *cost_function 
   //         = ReProjectionResidual::Create(
-  //             pictures[p].detections[d].corners[c].data(), 
-  //             targets[pictures[p].detections[d].targetID].obj_points_in_target[c].data());
+  //             pictures[6].detections[0].corners[0].data(), 
+  //             targets[pictures[6].detections[0].targetID].obj_points_in_target[0].data());
 
-  //       problem.AddResidualBlock(
+  // problem.AddResidualBlock(
   //             cost_function, 
   //             NULL, 
   //             camera_intrinsics.data(), 
-  //             pictures[p].camera_T_world.data(), 
-  //             targets[pictures[p].detections[d].targetID].world_T_target.data());
-  //     }
-  //   }
-  // }
+  //             pictures[6].world_T_camera.data(), 
+  //             targets[pictures[6].detections[0].targetID].world_T_target.data());
+  
+
+  std::string report = "";
+  for(int p = 0; p < pictures.size(); p++)
+  {
+    ROS_INFO_STREAM("Picture idx: " << p);
+    // ROS_INFO_STREAM("world_T_cam: "); printStdAarray(pictures[p].world_T_camera);
+    for(int d = 0; d < pictures[p].detections.size(); d++)
+    {
+      // ROS_INFO_STREAM("Target idx: " << pictures[p].detections[d].targetID << '\n');
+      // ROS_INFO_STREAM("Detection idx: " << d);
+      for(int c = 0; c < pictures[p].detections[d].corners.size(); c++)
+      { 
+        // ROS_INFO_STREAM("Corner idx: " << c);
+        // ROS_INFO_STREAM("world_T_target: "); printStdAarray(targets[pictures[p].detections[d].targetID].world_T_target);
+        // ROS_INFO_STREAM("Corner values: "); printStdAarray(pictures[p].detections[d].corners[c]);
+        ceres::CostFunction *cost_function 
+          = ReProjectionResidual::Create(
+              pictures[p].detections[d].corners[c].data(), 
+              targets[pictures[p].detections[d].targetID].obj_points_in_target[c].data());
+
+        problem.AddResidualBlock(
+              cost_function, 
+              NULL, 
+              camera_intrinsics.data(), 
+              pictures[p].world_T_camera.data(), 
+              targets[pictures[p].detections[d].targetID].world_T_target.data());
+      // ROS_INFO("\n====================================\n");
+      // break;
+      }
+      // break;
+    }
+    // break;
+  }
 
   ceres::Solver::Options options;
   options.linear_solver_type = ceres::DENSE_SCHUR;
@@ -555,3 +585,20 @@ int main(int argc, char **argv)
   return 0;
 
 }
+
+
+// int main(int argc, char **argv)
+// {
+  
+//   ros::init(argc, argv, "synthetic_optimization");
+//   ros::NodeHandle n("~");
+//   Eigen::Matrix3d rotation_matrix;
+//   rotation_matrix << 0, -1, 0, 1, 0, 0, 0, 0, 1;
+//   std::array<double, 3> rodrigus_angle;
+//   ceres::RotationMatrixToAngleAxis(rotation_matrix.data(), rodrigus_angle.data());
+//   ROS_INFO_STREAM("0: "<<rodrigus_angle[0]);
+//   ROS_INFO_STREAM("1: "<<rodrigus_angle[1]);
+//   ROS_INFO_STREAM("2: "<<rodrigus_angle[2]);
+
+//   return 0;
+// }
