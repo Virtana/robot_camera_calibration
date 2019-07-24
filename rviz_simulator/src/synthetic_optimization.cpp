@@ -97,7 +97,7 @@ struct ReProjectionResidual
   }
 
   template <typename T>
-  bool operator()(const T* const camera_intrinsics, const T* const world_T_camera, const T* const world_T_target, T* residuals) 
+  bool operator()(const T* const camera_intrinsics, const T* const camera_T_world, const T* const world_T_target, T* residuals) 
   const
   {
     // for(int i = 0; i < 7; i++)
@@ -117,9 +117,9 @@ struct ReProjectionResidual
     T p[3];
     
     // ROS_INFO_STREAM("CERES: x: " << point[0] << "\ny: " << point[1] << "\nz: " << point[2]);
-    const T world_T_target_angle_axis[3] = {T(world_T_target[0]), T(world_T_target[1]), T(world_T_target[2])};
+    // const T world_T_target_angle_axis[3] = {T(world_T_target[0]), T(world_T_target[1]), T(world_T_target[2])};
 
-    ceres::AngleAxisRotatePoint(world_T_target_angle_axis, point, p);
+    ceres::AngleAxisRotatePoint(world_T_target, point, p);
     p[0] += world_T_target[3];
     p[1] += world_T_target[4];
     p[2] += world_T_target[5];
@@ -127,14 +127,14 @@ struct ReProjectionResidual
     // ROS_INFO_STREAM("CERES AFTER w_T_t: p0: " << p[0] << "\np1: " << p[1] << "\np2: " << p[2]);
 
 
-    const T point2[3] = {p[0], p[1], p[2]};
+    // const T point2[3] = {p[0], p[1], p[2]};
 
-    const T camera_T_world_angle_axis[3] = {T(world_T_camera[0]), T(world_T_camera[1]), T(world_T_camera[2])};
-    ceres::AngleAxisRotatePoint(camera_T_world_angle_axis, point2, p);
+    // const T camera_T_world_angle_axis[3] = {T(world_T_camera[0]), T(world_T_camera[1]), T(world_T_camera[2])};
+    ceres::AngleAxisRotatePoint(camera_T_world, p, p);
     
-    p[0] += -world_T_camera[3];
-    p[1] += -world_T_camera[4];
-    p[2] += world_T_camera[5];
+    p[0] += camera_T_world[3];
+    p[1] += camera_T_world[4];
+    p[2] += camera_T_world[5];
 
     // trying eigen
     // T world_T_target_quarternion[4];
@@ -289,24 +289,44 @@ std::array<double, 6> getReference_T_Target(const YAML::Node &node, std::string 
   
   if(inverse)
   {
-    // std::array<double, 3> rodrigues_angle_axis = node[reference_T_target_name]["rotation"].as<std::array<double, 3>>();
-    // double rotation_array[9];
-    // ceres::AngleAxisToRotationMatrix(rodrigues_angle_axis.data(), rotation_array);
-    // Eigen::Matrix3d rotation_matrix = Eigen::Map<Eigen::Matrix3d>(rotation_array);
+    std::array<double, 3> rodrigues_angle_axis = node[reference_T_target_name]["rotation"].as<std::array<double, 3>>();
+    double rotation_array[9];
+    ceres::AngleAxisToRotationMatrix(rodrigues_angle_axis.data(), rotation_array);
+    Eigen::Matrix3d rotation_matrix = Eigen::Map<Eigen::Matrix3d>(rotation_array);
     // rotation_matrix = rotation_matrix.inverse().eval();
-    // ceres::RotationMatrixToAngleAxis(rotation_matrix.data(), rodrigues_angle_axis.data());
+    Eigen::Vector3d translation_vector;
+    translation_vector << node[reference_T_target_name]["translation"][0].as<double>(),
+                          node[reference_T_target_name]["translation"][1].as<double>(),
+                          node[reference_T_target_name]["translation"][2].as<double>();
 
-    // reference_T_target[0] = rodrigues_angle_axis[0];
-    // reference_T_target[1] = rodrigues_angle_axis[1];
-    // reference_T_target[2] = rodrigues_angle_axis[2];
+    Eigen::Matrix4d affine3d_;
+    affine3d_ << rotation_array[0], rotation_array[3], rotation_array[6], translation_vector.x(),
+                rotation_array[1], rotation_array[4], rotation_array[7], translation_vector.y(),
+                rotation_array[2], rotation_array[5], rotation_array[8], translation_vector.z(),
+                0, 0, 0, 1;
+    
+    Eigen::Affine3d affine3d;
+    affine3d = affine3d_;
 
-    reference_T_target[0] = -node[reference_T_target_name]["rotation"][0].as<double>();
-    reference_T_target[1] = -node[reference_T_target_name]["rotation"][1].as<double>();
-    reference_T_target[2] = -node[reference_T_target_name]["rotation"][2].as<double>();
+    Eigen::Affine3d inverse_affine3d = affine3d.inverse();
 
-    reference_T_target[3] = -1*node[reference_T_target_name]["translation"][0].as<double>();
-    reference_T_target[4] = -1*node[reference_T_target_name]["translation"][1].as<double>();
-    reference_T_target[5] = -1*node[reference_T_target_name]["translation"][2].as<double>();
+    ceres::RotationMatrixToAngleAxis(inverse_affine3d.rotation().data(), rodrigues_angle_axis.data());
+
+    reference_T_target[0] = rodrigues_angle_axis[0];
+    reference_T_target[1] = rodrigues_angle_axis[1];
+    reference_T_target[2] = rodrigues_angle_axis[2];
+
+    reference_T_target[3] = inverse_affine3d.translation().x();
+    reference_T_target[4] = inverse_affine3d.translation().y();
+    reference_T_target[5] = inverse_affine3d.translation().z();
+
+    // reference_T_target[0] = -node[reference_T_target_name]["rotation"][0].as<double>();
+    // reference_T_target[1] = -node[reference_T_target_name]["rotation"][1].as<double>();
+    // reference_T_target[2] = -node[reference_T_target_name]["rotation"][2].as<double>();
+
+    // reference_T_target[3] = -1*node[reference_T_target_name]["translation"][0].as<double>();
+    // reference_T_target[4] = -1*node[reference_T_target_name]["translation"][1].as<double>();
+    // reference_T_target[5] = -1*node[reference_T_target_name]["translation"][2].as<double>();
   }
   else
   {
@@ -557,10 +577,10 @@ int main(int argc, char **argv)
               cost_function, 
               NULL, 
               camera_intrinsics.data(), 
-              pictures[p].world_T_camera.data(), 
+              pictures[p].camera_T_world.data(), 
               targets[pictures[p].detections[d].targetID].world_T_target.data());
       // ROS_INFO("\n====================================\n");
-      // break;
+        // break;
       }
       // break;
     }
