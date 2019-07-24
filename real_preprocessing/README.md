@@ -11,7 +11,7 @@
 	find_package(find_package(OpenCV REQUIRED PATHS "YOUR-FOLDER-PATH")
 
 ### Camera calibration
-The package requires calibration of the camera to be used. This was done using [camera\_calibration](http://wiki.ros.org/camera_calibration).  The intrinsics obtained should be recorded as it is required for detection accuracy. Your intrinsic matrix, K, must be specified in **corner\_detection.cpp**, specifically at line 18,  `intrinsic << #, #, #, #, #, #, #, #, #;`.
+The package requires calibration of the camera for an initial guess of the camera intrinsics, to be used for OpenCV's SolvePNP function. This was done using [camera\_calibration](http://wiki.ros.org/camera_calibration). The calibration package generates a "camera.yaml" file which is used in **camera\_pose.cpp**.
 
 ### Image publishing 
 **corner\_detection.cpp** simulates image capture with user input. By default, `""` /`ENTER` is the assigned trigger for image processing and YAML dumping. The YAML file for each frame detection is dumped at the working directory. To view the video stream detection, [image\_view](http://wiki.ros.org/image_view) was the library included. Rviz can be used alternatively with some configuration.
