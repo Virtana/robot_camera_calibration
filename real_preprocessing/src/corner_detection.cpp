@@ -21,7 +21,7 @@ void yamlDump(double tag_size, int tag_id, int index)
 
   // yaml population format
   fout << "\n - TargetID: " << std::to_string(tag_id); 
-  fout << "\n   size: " << std::to_string(tag_size);
+  fout << "\n   size: [ " + std::to_string(tag_size) + ", " + std::to_string(tag_size) + " ]";
   fout << "\n   corners:";
   fout << "\n    0: [ " + std::to_string(coordinate[0].first) + ", " + std::to_string(coordinate[0].second) + " ]";
   fout << "\n    1: [ " + std::to_string(coordinate[1].first) + ", " + std::to_string(coordinate[1].second) + " ]";

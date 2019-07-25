@@ -16,10 +16,14 @@ The package requires calibration of the camera for an initial guess of the camer
 ### Image publishing 
 **corner\_detection.cpp** simulates image capture with user input. By default, `""` /`ENTER` is the assigned trigger for image processing and YAML dumping. The YAML file for each frame detection is dumped at the working directory named "detection_n.yml" for the nth image taken. To view the video stream detection, [image\_view](http://wiki.ros.org/image_view) was the library included. Rviz can be used alternatively with some configuration.
 
+###File handling
+**corner\_detection.cpp** generates detection YAML files in the directory in which it is called. Until a launch file is implemented, **camera\_pose.cpp** must be run in the same directory such that these YAML files can be parsed. 
+
 ### Steps: 
 	1.  $ roscore 
 	2.  $ rosparam load ~/.ros/camera_info/camera.yaml
 	3.  $ rosrun cv_camera cv_camera_node 
 	4.  $ roslaunch apriltag_ros continuous_detection.launch camera_name:=/cv_camera image_topic:=image_raw 
 	5.  $ rosrun image_view image_view image:=tag_detections_image
-	6.  $ rosrun real_preprocessing corner_detection_node
+	6.  $ rosrun real_preprocessing camera_pose_node
+	7.  $ rosrun real_preprocessing corner_detection_node
