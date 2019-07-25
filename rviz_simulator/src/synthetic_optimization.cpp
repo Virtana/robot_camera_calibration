@@ -27,10 +27,18 @@
  * POSSIBILITY OF SUCH DAMAGE.
  *
  * Author: Christopher Sahadeo
+ * 
+ * Ceres optimizer for a bundle adjustment camera calibration problem
+ * Considers the reprojection error to optimize the following parameters:
+ *    world_T_camera
+ *    world_T_target
+ *    camera_intrinsics
+ *  
  */
 
-/**
- * TODO: 
+/* TODO: 
+ * 
+ * Do not store detection files with no detections
  * 
  * templating the YAML-cpp readers to read automatically/refactoring the save methods
  * exception handling
@@ -45,14 +53,14 @@
 
 #include <yaml-cpp/yaml.h>
 
-// getting a directory/file listing
+#include <Eigen/Dense>
+
+// for getting a directory/file listing
 #include <dirent.h>
 
 // for making directories
 #include <sys/stat.h>
 #include <sys/types.h>
-
-#include <Eigen/Dense>
 
 #define REFERENCE_T_TARGET_SIZE 6
 #define OBJ_POINTS_SIZE 3
@@ -61,18 +69,30 @@
 #define NUM_CORNERS 4
 #define CAMERA_INTRINSICS_SIZE 12
 
+// All transforms are stored as a 6 elemnt double array
+// [0, 1, 2] - rodriguez angle-axis rotation
+// [3, 4, 5] - translation
+
+// The target struct models a fiducial target (E.g. an AprilTag)
+// It stores the world_T_target transform
+// and the 3D object point coordinates in the target frame
 struct Target
 {
   std::array<double, REFERENCE_T_TARGET_SIZE> world_T_target;
   std::array<std::array<double, OBJ_POINTS_SIZE>, NUM_OBJ_POINTS> obj_points_in_target;
 };
 
+// A detection may occur when a camera takes a picture
+// A dectection consists of a targetID and the pixel [x, y] coordinates of the 4 corners that appear in the image
+// This targetID is looked up in the targets collection to retrieve the corresponding world_t_target
 struct Detection
 {
   int targetID;
   std::array<std::array<double, CORNER_POINTS_SIZE>, NUM_CORNERS> corners;
 };
 
+// A picture consists of 0 or more detections
+// The picture struct records the world_T_camera transform which is then inverted to get camera_T_world
 struct Picture
 {
   std::array<double, REFERENCE_T_TARGET_SIZE> world_T_camera;
@@ -80,7 +100,7 @@ struct Picture
   std::vector<Detection> detections;
 };
 
-
+// Templated functor for the Bundle Adjustment problem
 struct ReProjectionResidual
 {
   // Constructor
@@ -96,65 +116,36 @@ struct ReProjectionResidual
     this->obj_point_in_target[2] = obj_point_in_target[2];
   }
 
+  // Using the openCV camera calibration model:
+  // https://docs.opencv.org/2.4/modules/calib3d/doc/camera_calibration_and_3d_reconstruction.html
   template <typename T>
   bool operator()(const T* const camera_intrinsics, const T* const camera_T_world, const T* const world_T_target, T* residuals) 
   const
   {
-    // for(int i = 0; i < 7; i++)
-    //   ROS_INFO_STREAM("FROM CERES" << camera_extrinsics[i]);
-    // ROS_INFO_STREAM(std::endl);
-
-    // ROS_INFO_STREAM("FROM CERES: wTt[0] " << (world_T_target[0]) << "wTt[1]: " << (world_T_target[1]) << "wTt[2]: " << (world_T_target[2]));
-    // // for(int i = 0; i < 16; i++)
-    // //   ROS_INFO_STREAM(*(world_T_camera+i));
-
     const T point[3] = 
     {
       T(this->obj_point_in_target[0]),
       T(this->obj_point_in_target[1]),
       T(this->obj_point_in_target[2])
     };
+
     T p[3];
-    
-    // ROS_INFO_STREAM("CERES: x: " << point[0] << "\ny: " << point[1] << "\nz: " << point[2]);
-    // const T world_T_target_angle_axis[3] = {T(world_T_target[0]), T(world_T_target[1]), T(world_T_target[2])};
 
     ceres::AngleAxisRotatePoint(world_T_target, point, p);
     p[0] += world_T_target[3];
     p[1] += world_T_target[4];
     p[2] += world_T_target[5];
 
-    // ROS_INFO_STREAM("CERES AFTER w_T_t: p0: " << p[0] << "\np1: " << p[1] << "\np2: " << p[2]);
-
-
-    // const T point2[3] = {p[0], p[1], p[2]};
-
-    // const T camera_T_world_angle_axis[3] = {T(world_T_camera[0]), T(world_T_camera[1]), T(world_T_camera[2])};
-    ceres::AngleAxisRotatePoint(camera_T_world, p, p);
-    
+    ceres::AngleAxisRotatePoint(camera_T_world, p, p);    
     p[0] += camera_T_world[3];
     p[1] += camera_T_world[4];
     p[2] += camera_T_world[5];
 
-    // trying eigen
-    // T world_T_target_quarternion[4];
-    // const T world_T_target_angle_axis[3] = {T(world_T_target[0]), T(world_T_target[1]), T(world_T_target[2])};
-    // ceres::AngleAxisToQuaternion(world_T_target_angle_axis, world_T_target_quarternion);
-    // Eigen::Quaternion<T> world_T_target_eigen_quarternion(world_T_target_quarternion[0],world_T_target_quarternion[1],world_T_target_quarternion[2],world_T_target_quarternion[3]);    
-
-
-    // ROS_INFO_STREAM("CERES after c_T_w: p0: " << p[0] << "\np1: " << p[1] << "\np2: " << p[2]);
-
-  
-    // scaling
     T x_prime = p[0] / p[2];
     T x_prime_squared = x_prime * x_prime;
     T y_prime = p[1] / p[2];
     T y_prime_squared = y_prime * y_prime;
 
-    // ROS_INFO_STREAM("CERES: x_prime: " << x_prime << "\ny_prime: " << y_prime);
-
-    // rectifying the camera distortion
     const T& fx = camera_intrinsics[0];
     const T& fy = camera_intrinsics[1];
     const T& cx = camera_intrinsics[2];
@@ -184,17 +175,8 @@ struct ReProjectionResidual
     T u = fx * x_double_prime + cx;
     T v = fy * y_double_prime + cy;
 
-    // // negates the distortion
-    // u = fx*x_prime + cx;
-    // v = fy*y_prime + cy;
-
-    // ROS_INFO_STREAM("FROM CERES: u: " << u << "\nv: " << v);
-
-    // residuals
     residuals[0] = u - T(this->observed_pixel_coordinates[0]);
     residuals[1] = v - T(this->observed_pixel_coordinates[1]);
-
-    // ROS_INFO_STREAM("FROM CERES: r_0: " << residuals[0] << "\nr_1: " << residuals[1]);
 
     return true;
   }
@@ -216,9 +198,9 @@ private:
 template <typename T>
 void printVector(std::vector<T> data)
 {
-  for (auto i = data.begin(); i != data.end(); i++)
+  for (T element : data)
   {
-    ROS_INFO_STREAM(*i);
+    ROS_INFO_STREAM(element);
   }
   ROS_INFO_STREAM(std::endl);
 
@@ -226,25 +208,14 @@ void printVector(std::vector<T> data)
 
 // print std::array
 template <typename T, std::size_t N>
-void printStdAarray(std::array<T, N> data)
+void printStdArray(std::array<T, N> data)
 {
-  for (auto i = data.begin(); i != data.end(); i++)
+  for (T element : data)
   {
-    ROS_INFO_STREAM(*i);
+    ROS_INFO_STREAM(element);
   }
   ROS_INFO_STREAM(std::endl);
 
-}
-
-// print array
-template <typename T>
-void printArray(T array[], int n)
-{
-  for(int i = 0; i < n; i++)
-  {
-    ROS_INFO_STREAM(array[i]);
-  }
-  ROS_INFO_STREAM(std::endl);
 }
 
 void printTargets(std::vector<Target> targets)
@@ -252,16 +223,17 @@ void printTargets(std::vector<Target> targets)
   for(int i = 0; i < targets.size(); i++)
   {
     ROS_INFO_STREAM("targetID: " << i);
-    ROS_INFO_STREAM("world_T_target: "); printStdAarray(targets[i].world_T_target);
+    ROS_INFO_STREAM("world_T_target: "); printStdArray(targets[i].world_T_target);
     ROS_INFO_STREAM("obj_points_in_target: ");
     for(int j = 0; j < targets[i].obj_points_in_target.size(); j++)
     {
-      ROS_INFO_STREAM("Corner index: " << j); printStdAarray(targets[i].obj_points_in_target[j]);
+      ROS_INFO_STREAM("Corner index: " << j); printStdArray(targets[i].obj_points_in_target[j]);
     }
   }
 }
 
-// gets the list of detection entites (an entity is a directory or file) with the substring "detections"
+// searches a given directory
+// returns the list of detection entites (an entity is a directory or file) with the substring "detections"
 std::vector<std::string> getDetectionEntityNames(std::string directory_path, unsigned char entity_type)
 {
   std::vector<std::string> detection_entities;
@@ -289,44 +261,35 @@ std::array<double, 6> getReference_T_Target(const YAML::Node &node, std::string 
   
   if(inverse)
   {
+    // getting rodrigues angle axis rotation and converting to Eigen::Matrix3d
     std::array<double, 3> rodrigues_angle_axis = node[reference_T_target_name]["rotation"].as<std::array<double, 3>>();
     double rotation_array[9];
     ceres::AngleAxisToRotationMatrix(rodrigues_angle_axis.data(), rotation_array);
     Eigen::Matrix3d rotation_matrix = Eigen::Map<Eigen::Matrix3d>(rotation_array);
-    // rotation_matrix = rotation_matrix.inverse().eval();
-    Eigen::Vector3d translation_vector;
-    translation_vector << node[reference_T_target_name]["translation"][0].as<double>(),
-                          node[reference_T_target_name]["translation"][1].as<double>(),
-                          node[reference_T_target_name]["translation"][2].as<double>();
 
-    Eigen::Matrix4d affine3d_;
-    affine3d_ << rotation_array[0], rotation_array[3], rotation_array[6], translation_vector.x(),
-                rotation_array[1], rotation_array[4], rotation_array[7], translation_vector.y(),
-                rotation_array[2], rotation_array[5], rotation_array[8], translation_vector.z(),
-                0, 0, 0, 1;
-    
-    Eigen::Affine3d affine3d;
-    affine3d = affine3d_;
+    // getting translation and converting to Eigen::Vector3d
+    std::array<double, 3> translation = node[reference_T_target_name]["translation"].as<std::array<double, 3>>();
+    Eigen::Vector3d translation_vector = Eigen::Map<Eigen::Vector3d>(translation.data());
 
-    Eigen::Affine3d inverse_affine3d = affine3d.inverse();
+    // combining rotation matrix and translation vector to Eigen::Affine3d
+    Eigen::Affine3d transform;
+    transform.translation() = translation_vector;
+    transform.linear() = rotation_matrix;
 
-    ceres::RotationMatrixToAngleAxis(inverse_affine3d.rotation().data(), rodrigues_angle_axis.data());
+    // inverting the transform
+    Eigen::Affine3d transform_inverse = transform.inverse();
 
+    // converting from rotation matrix back to rodriguez angle axis
+    ceres::RotationMatrixToAngleAxis(transform_inverse.rotation().data(), rodrigues_angle_axis.data());
+
+    // storing in an std::array
     reference_T_target[0] = rodrigues_angle_axis[0];
     reference_T_target[1] = rodrigues_angle_axis[1];
     reference_T_target[2] = rodrigues_angle_axis[2];
 
-    reference_T_target[3] = inverse_affine3d.translation().x();
-    reference_T_target[4] = inverse_affine3d.translation().y();
-    reference_T_target[5] = inverse_affine3d.translation().z();
-
-    // reference_T_target[0] = -node[reference_T_target_name]["rotation"][0].as<double>();
-    // reference_T_target[1] = -node[reference_T_target_name]["rotation"][1].as<double>();
-    // reference_T_target[2] = -node[reference_T_target_name]["rotation"][2].as<double>();
-
-    // reference_T_target[3] = -1*node[reference_T_target_name]["translation"][0].as<double>();
-    // reference_T_target[4] = -1*node[reference_T_target_name]["translation"][1].as<double>();
-    // reference_T_target[5] = -1*node[reference_T_target_name]["translation"][2].as<double>();
+    reference_T_target[3] = transform_inverse.translation().x();
+    reference_T_target[4] = transform_inverse.translation().y();
+    reference_T_target[5] = transform_inverse.translation().z();
   }
   else
   {
@@ -342,6 +305,7 @@ std::array<double, 6> getReference_T_Target(const YAML::Node &node, std::string 
   return reference_T_target;
 }
 
+// returns a single detection from the YAML file
 Detection getDetection(const YAML::Node &detection_node)
 {
   Detection detection;
@@ -356,6 +320,7 @@ Detection getDetection(const YAML::Node &detection_node)
   return detection;
 }
 
+// returns a vector of all detections from a given YAML file
 std::vector<Detection> getDetections(const YAML::Node &detections_node)
 {
   std::vector<Detection> detections;
@@ -368,6 +333,7 @@ std::vector<Detection> getDetections(const YAML::Node &detections_node)
   return detections;
 }
 
+// returns a picture from a single YAML file
 Picture getPicture(std::string picture_file_path)
 {
   YAML::Node picture_node = YAML::LoadFile(picture_file_path);
@@ -383,17 +349,26 @@ Picture getPicture(std::string picture_file_path)
   return picture;
 }
 
+// returns a vector of all pictures from a given directory
+// if there are no detections in a picture, then that picture is not pushed to the vector
 std::vector<Picture> getPictures(std::string detections_directory_path)
 {
   // get list of detection files
   std::vector<std::string> detection_file_names = getDetectionEntityNames(detections_directory_path, DT_REG);
-  // std::sort(detection_file_names.begin(), detection_file_names.end());
 
   std::vector<Picture> pictures;
   for(auto detection_file_name : detection_file_names)
   {
-    ROS_INFO_STREAM("FILE: " << detection_file_name.c_str());
-    pictures.push_back(getPicture(detections_directory_path+"/"+detection_file_name));
+    Picture picture = getPicture(detections_directory_path+"/"+detection_file_name);
+    if(!picture.detections.empty())
+    {
+      pictures.push_back(picture);
+      ROS_INFO_STREAM("Picture added: " << detection_file_name);
+    }
+    else
+    {
+      ROS_INFO_STREAM("No detections in picture: " << detection_file_name);
+    }
   }
   return pictures;
 }
@@ -403,20 +378,22 @@ void printPictures(std::vector<Picture> pictures)
   for(int i = 0; i < pictures.size(); i++)
   {
     ROS_INFO_STREAM("Picture #" << i);
-    ROS_INFO("world_T_camera"); printStdAarray(pictures[i].world_T_camera);
-    ROS_INFO("camera_T_world"); printStdAarray(pictures[i].camera_T_world);
+    ROS_INFO("world_T_camera"); printStdArray(pictures[i].world_T_camera);
+    ROS_INFO("camera_T_world"); printStdArray(pictures[i].camera_T_world);
     for(Detection detection : pictures[i].detections)
     {
       ROS_INFO_STREAM("targetID: " << detection.targetID);
       for(int j = 0; j < detection.corners.size(); j++)
       {
-        ROS_INFO_STREAM("Corner #" << j << ": "); printStdAarray(detection.corners[j]);
+        ROS_INFO_STREAM("Corner #" << j << ": "); printStdArray(detection.corners[j]);
       }
     }
   }
   ROS_INFO("\n");
 }
 
+// reads target data from a YAML file
+// returns a vector of targets 
 std::vector<Target> getTargets(std::string targets_directory_path)
 {
   YAML::Node targets_node = YAML::LoadFile(targets_directory_path);
@@ -453,7 +430,7 @@ std::vector<Target> getTargets(std::string targets_directory_path)
   return targets;
 }
 
-
+// returns an array of camera intrinsics
 std::array<double, CAMERA_INTRINSICS_SIZE> getCameraIntrinsics(std::string camera_file_path)
 {
   YAML::Node camera_node = YAML::LoadFile(camera_file_path);
@@ -463,6 +440,7 @@ std::array<double, CAMERA_INTRINSICS_SIZE> getCameraIntrinsics(std::string camer
   }
 
   std::array<double, CAMERA_INTRINSICS_SIZE> camera_intrinsics;
+
   // XXX: hardcoded for the plumb_bob distortion model
   camera_intrinsics[0] = camera_node["camera_matrix"]["data"][0].as<double>();              // fx
   camera_intrinsics[1] = camera_node["camera_matrix"]["data"][4].as<double>();              // fy
@@ -482,7 +460,7 @@ std::array<double, CAMERA_INTRINSICS_SIZE> getCameraIntrinsics(std::string camer
   return camera_intrinsics;
 }
 
-
+// gets the directory path that contains all the picture files (E.g. detection_0.yaml)
 std::string getDetectionsDirectoryPath(ros::NodeHandle &n)
 {
   // checking if the detections directory name was passed as a cmd line arg
@@ -506,24 +484,8 @@ std::string getDetectionsDirectoryPath(ros::NodeHandle &n)
   return detections_directory_path;
 }
 
-
-// detections directory: detections_1563919027
-// [ INFO] [1563993274.518412971]: FILE: detections_6.yaml
-// [ INFO] [1563993274.518854607]: FILE: detections_5.yaml
-// [ INFO] [1563993274.519459853]: FILE: detections_7.yaml
-// [ INFO] [1563993274.519925754]: FILE: detections_1.yaml
-// [ INFO] [1563993274.520442703]: FILE: detections_4.yaml
-// [ INFO] [1563993274.520835566]: FILE: detections_8.yaml
-// [ INFO] [1563993274.521130784]: FILE: detections_2.yaml
-// [ INFO] [1563993274.521421798]: FILE: detections_3.yaml
-// [ INFO] [1563993274.521796625]: FILE: detections_0.yaml
-
-
-
 int main(int argc, char **argv)
-{
-
-  
+{  
   ros::init(argc, argv, "synthetic_optimization");
   ros::NodeHandle n("~");
 
@@ -531,43 +493,19 @@ int main(int argc, char **argv)
 
   std::array<double, CAMERA_INTRINSICS_SIZE> camera_intrinsics = getCameraIntrinsics(detections_directory_path+"/camera.yaml");
   std::array<double, CAMERA_INTRINSICS_SIZE> initial_intrinsics = camera_intrinsics;
-  // printStdAarray(camera_intrinsics);
   
   std::vector<Target> targets = getTargets(detections_directory_path+"/targets.yaml");
-  // printTargets(targets);
 
   std::vector<Picture> pictures = getPictures(detections_directory_path);
-  // printPictures(pictures);
 
   ceres::Problem problem;
 
-  // ceres::CostFunction *cost_function 
-  //         = ReProjectionResidual::Create(
-  //             pictures[6].detections[0].corners[0].data(), 
-  //             targets[pictures[6].detections[0].targetID].obj_points_in_target[0].data());
-
-  // problem.AddResidualBlock(
-  //             cost_function, 
-  //             NULL, 
-  //             camera_intrinsics.data(), 
-  //             pictures[6].world_T_camera.data(), 
-  //             targets[pictures[6].detections[0].targetID].world_T_target.data());
-  
-
-  std::string report = "";
   for(int p = 0; p < pictures.size(); p++)
   {
-    ROS_INFO_STREAM("Picture idx: " << p);
-    // ROS_INFO_STREAM("world_T_cam: "); printStdAarray(pictures[p].world_T_camera);
     for(int d = 0; d < pictures[p].detections.size(); d++)
     {
-      // ROS_INFO_STREAM("Target idx: " << pictures[p].detections[d].targetID << '\n');
-      // ROS_INFO_STREAM("Detection idx: " << d);
       for(int c = 0; c < pictures[p].detections[d].corners.size(); c++)
       { 
-        // ROS_INFO_STREAM("Corner idx: " << c);
-        // ROS_INFO_STREAM("world_T_target: "); printStdAarray(targets[pictures[p].detections[d].targetID].world_T_target);
-        // ROS_INFO_STREAM("Corner values: "); printStdAarray(pictures[p].detections[d].corners[c]);
         ceres::CostFunction *cost_function 
           = ReProjectionResidual::Create(
               pictures[p].detections[d].corners[c].data(), 
@@ -578,13 +516,9 @@ int main(int argc, char **argv)
               NULL, 
               camera_intrinsics.data(), 
               pictures[p].camera_T_world.data(), 
-              targets[pictures[p].detections[d].targetID].world_T_target.data());
-      // ROS_INFO("\n====================================\n");
-        // break;
-      }
-      // break;
-    }
-    // break;
+              targets[pictures[p].detections[d].targetID].world_T_target.data());      
+      }      
+    }    
   }
 
   ceres::Solver::Options options;
@@ -605,20 +539,3 @@ int main(int argc, char **argv)
   return 0;
 
 }
-
-
-// int main(int argc, char **argv)
-// {
-  
-//   ros::init(argc, argv, "synthetic_optimization");
-//   ros::NodeHandle n("~");
-//   Eigen::Matrix3d rotation_matrix;
-//   rotation_matrix << 0, -1, 0, 1, 0, 0, 0, 0, 1;
-//   std::array<double, 3> rodrigus_angle;
-//   ceres::RotationMatrixToAngleAxis(rotation_matrix.data(), rodrigus_angle.data());
-//   ROS_INFO_STREAM("0: "<<rodrigus_angle[0]);
-//   ROS_INFO_STREAM("1: "<<rodrigus_angle[1]);
-//   ROS_INFO_STREAM("2: "<<rodrigus_angle[2]);
-
-//   return 0;
-// }
