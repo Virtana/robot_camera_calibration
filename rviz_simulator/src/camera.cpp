@@ -83,10 +83,10 @@ Camera::~Camera()
 void Camera::initObjPointsInTarget()
 {
   Eigen::Vector4d c0, c1, c2, c3;
-  c0 << -this->target_x_length_/ 2, -this->target_y_length_/ 2, 0, 1;  // old c0
-  c3 << -this->target_x_length_/ 2, this->target_y_length_/ 2, 0, 1;   // old c1
-  c2 << this->target_x_length_/ 2, this->target_y_length_/ 2, 0, 1;    // old c2
-  c1 << this->target_x_length_/ 2, -this->target_y_length_/ 2, 0, 1;   // old c3
+  c0 << -this->target_x_length_ / 2, -this->target_y_length_ / 2, 0, 1;  // old c0
+  c3 << -this->target_x_length_ / 2, this->target_y_length_ / 2, 0, 1;   // old c1
+  c2 << this->target_x_length_ / 2, this->target_y_length_ / 2, 0, 1;    // old c2
+  c1 << this->target_x_length_ / 2, -this->target_y_length_ / 2, 0, 1;   // old c3
 
   this->obj_points_in_target_.push_back(c0);
   this->obj_points_in_target_.push_back(c1);

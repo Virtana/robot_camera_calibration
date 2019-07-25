@@ -204,8 +204,8 @@ int main(int argc, char** argv)
   tf::quaternionEigenToMsg(q, starting_camera_orientation);
 
   rviz_simulator::Camera camera(world_frame_id, "camera", starting_camera_postion, starting_camera_orientation, orange,
-                                0.2, 0.1, g_interactive_marker_server, visualization_msgs::InteractiveMarkerControl::BUTTON,
-                                camera_properties);
+                                0.2, 0.1, g_interactive_marker_server,
+                                visualization_msgs::InteractiveMarkerControl::BUTTON, camera_properties);
 
   g_interactive_marker_server->applyChanges();
   ros::spin();
