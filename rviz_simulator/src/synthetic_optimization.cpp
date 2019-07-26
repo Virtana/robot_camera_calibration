@@ -39,6 +39,7 @@
 /* TODO:
  *
  * templating the YAML-cpp readers to read automatically/refactoring the save methods
+ * Use a YAML conversions class for all other nodes
  * exception handling
  *
  */
@@ -65,7 +66,7 @@
 #define CORNER_POINTS_SIZE 2
 #define NUM_OBJ_POINTS 4
 #define NUM_CORNERS 4
-#define CAMERA_INTRINSICS_SIZE 12
+#define CAMERA_INTRINSICS_SIZE 9
 
 // All transforms are stored as a 6 elemnt double array
 // [0, 1, 2] - rodriguez angle-axis rotation
@@ -76,6 +77,7 @@
 // and the 3D object point coordinates in the target frame
 struct Target
 {
+  int targetID;
   std::array<double, REFERENCE_T_TARGET_SIZE> world_T_target;
   std::array<std::array<double, OBJ_POINTS_SIZE>, NUM_OBJ_POINTS> obj_points_in_target;
 };
@@ -149,9 +151,12 @@ struct ReProjectionResidual
     const T& p1 = camera_intrinsics[6];
     const T& p2 = camera_intrinsics[7];
     const T& k3 = camera_intrinsics[8];
-    const T& k4 = camera_intrinsics[9];
-    const T& k5 = camera_intrinsics[10];
-    const T& k6 = camera_intrinsics[11];
+    // const T& k4 = camera_intrinsics[9];
+    // const T& k5 = camera_intrinsics[10];
+    // const T& k6 = camera_intrinsics[11];
+    const T k4 = T(0.0);
+    const T k5 = T(0.0);
+    const T k6 = T(0.0);
 
     T r_raise_2 = x_prime_squared + y_prime_squared;
     T r_raise_4 = r_raise_2 * r_raise_2;
@@ -210,19 +215,21 @@ void printStdArray(std::array<T, N> data)
   ROS_INFO_STREAM(std::endl);
 }
 
-void printTargets(std::vector<Target> targets)
+void printTargets(std::map<int, Target> targets)
 {
-  for (int i = 0; i < targets.size(); i++)
-  {
-    ROS_INFO_STREAM("targetID: " << i);
+  std::map<int, Target>::iterator itr;
+  for(itr = targets.begin(); itr != targets.end(); ++itr){
+    //  const YAML::Node& target_node = *target_iterator;
+    const Target target = itr->second;
+    ROS_INFO_STREAM("targetID: " << itr->first);
     ROS_INFO_STREAM("world_T_target: ");
-    printStdArray(targets[i].world_T_target);
-    ROS_INFO_STREAM("obj_points_in_target: ");
-    for (int j = 0; j < targets[i].obj_points_in_target.size(); j++)
-    {
-      ROS_INFO_STREAM("Corner index: " << j);
-      printStdArray(targets[i].obj_points_in_target[j]);
-    }
+    printStdArray(target.world_T_target);
+    // ROS_INFO_STREAM("obj_points_in_target: ");
+    // for (int j = 0; j < target.obj_points_in_target.size(); j++)
+    // {
+    //   ROS_INFO_STREAM("Corner index: " << j);
+    //   printStdArray(target.obj_points_in_target[j]);
+    // }
   }
 }
 
@@ -389,7 +396,7 @@ void printPictures(std::vector<Picture> pictures)
 
 // reads target data from a YAML file
 // returns a vector of targets
-std::vector<Target> getTargets(std::string targets_directory_path)
+std::map<int, Target> getTargets(std::string targets_directory_path)
 {
   YAML::Node targets_node = YAML::LoadFile(targets_directory_path);
   if (!targets_node)
@@ -397,7 +404,7 @@ std::vector<Target> getTargets(std::string targets_directory_path)
     ROS_ERROR("Targets file read error.");
   }
 
-  std::vector<Target> targets;
+  std::map<int, Target> targets;
 
   // iterating through all targets
   for (YAML::const_iterator target_iterator = targets_node["targets"].begin();
@@ -405,6 +412,9 @@ std::vector<Target> getTargets(std::string targets_directory_path)
   {
     const YAML::Node& target_node = *target_iterator;
     Target target;
+
+    // targetID
+    target.targetID = target_node["targetID"].as<int>();
 
     // world_T_target
     target.world_T_target = getReference_T_Target(target_node, "world_T_target", false);
@@ -417,7 +427,7 @@ std::vector<Target> getTargets(std::string targets_directory_path)
       target.obj_points_in_target[corner_index] = obj_points_iterator->second.as<std::array<double, OBJ_POINTS_SIZE>>();
     }
 
-    targets.push_back(target);
+    targets.insert(std::pair<int, Target>(target.targetID, target));
   }
 
   return targets;
@@ -446,9 +456,9 @@ std::array<double, CAMERA_INTRINSICS_SIZE> getCameraIntrinsics(std::string camer
   camera_intrinsics[6] = camera_node["distortion_coefficients"]["data"][2].as<double>();  // p1
   camera_intrinsics[7] = camera_node["distortion_coefficients"]["data"][3].as<double>();  // p2
   camera_intrinsics[8] = camera_node["distortion_coefficients"]["data"][4].as<double>();  // k3
-  camera_intrinsics[9] = 0;                                                               // k4
-  camera_intrinsics[10] = 0;                                                              // k5
-  camera_intrinsics[11] = 0;                                                              // k6
+  // camera_intrinsics[9] = 0;                                                               // k4
+  // camera_intrinsics[10] = 0;                                                              // k5
+  // camera_intrinsics[11] = 0;                                                              // k6
 
   return camera_intrinsics;
 }
@@ -477,6 +487,28 @@ std::string getDetectionsDirectoryPath(ros::NodeHandle& n)
   return detections_directory_path;
 }
 
+// optimized results consists of 
+// - camera_intrinsics
+// - world_T_camera for each image
+// - world_T_target for each fiducial target
+
+// function prints optimized results to console
+void printOptimizedResults()
+{
+
+}
+
+// function outputs optimized results to YAML files created in a new directory 
+void optimizedResultsToYAML(std::string output_directory_path)
+{
+  YAML::Node camera_node = YAML::LoadFile(output_directory_path);
+  if (!camera_node)
+  {
+    ROS_ERROR("Camera intrisics file read error.");
+  }
+
+}
+
 int main(int argc, char** argv)
 {
   ros::init(argc, argv, "synthetic_optimization");
@@ -488,7 +520,9 @@ int main(int argc, char** argv)
       getCameraIntrinsics(detections_directory_path + "/camera.yaml");
   std::array<double, CAMERA_INTRINSICS_SIZE> initial_intrinsics = camera_intrinsics;
 
-  std::vector<Target> targets = getTargets(detections_directory_path + "/targets.yaml");
+  std::map<int, Target> targets = getTargets(detections_directory_path + "/targets.yaml");
+  // printTargets(targets);
+
 
   std::vector<Picture> pictures = getPictures(detections_directory_path);
 
@@ -502,10 +536,10 @@ int main(int argc, char** argv)
       {
         ceres::CostFunction* cost_function =
             ReProjectionResidual::Create(pictures[p].detections[d].corners[c].data(),
-                                         targets[pictures[p].detections[d].targetID].obj_points_in_target[c].data());
+                                         targets.at(pictures[p].detections[d].targetID).obj_points_in_target[c].data());
 
         problem.AddResidualBlock(cost_function, NULL, camera_intrinsics.data(), pictures[p].camera_T_world.data(),
-                                 targets[pictures[p].detections[d].targetID].world_T_target.data());
+                                 targets.at(pictures[p].detections[d].targetID).world_T_target.data());
       }
     }
   }
@@ -524,6 +558,8 @@ int main(int argc, char** argv)
   {
     ROS_INFO_STREAM(initial_intrinsics[i] << "\t\t" << camera_intrinsics[i]);
   }
+
+  printTargets(targets);
 
   return 0;
 }
