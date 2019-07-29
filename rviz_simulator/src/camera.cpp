@@ -350,7 +350,7 @@ bool Camera::isInRange(std::vector<Eigen::Vector2d> corners)
 
   for (int i = 0; i < differences.size(); i++)
   {
-    if (differences[i].norm() < this->camera_properties_.min_distance_between_target_corners)
+    if (differences[i].norm() < this->camera_properties_.min_corner_dist)
     {
       ROS_INFO_STREAM("Target not in range\n.");
       return false;

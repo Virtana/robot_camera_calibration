@@ -36,7 +36,9 @@
  *  Error checking and exception handling
  *
  * ===========================================
- *
+ * 
+ * Refactor using 
+ *  
  *  Make it impossible to move markers after first camera click
  *      Requires a removal and reinit of interactive markers upon first camera click
  */
@@ -120,7 +122,7 @@ rviz_simulator::CameraProperties loadCameraProperties(const ros::NodeHandle& n)
   {
     ROS_ERROR("Unknown camera distortion model specified!\n");
   }
-  camera_properties.min_distance_between_target_corners = 30;
+  camera_properties.min_corner_dist = 30;
 
   return camera_properties;
 }

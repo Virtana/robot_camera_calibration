@@ -72,9 +72,9 @@ public:
   /// camera image extremes
   int image_height;
   int image_width;
-  double min_distance_between_target_corners;  // in pixels
-  double max_distance_between_camera_and_target;
-  double min_distance_between_camera_and_target;
+  double min_corner_dist;  // in pixels
+  double cam_target_max_dist;
+  double cam_target_min_dist;
 
   // camera distortion coefficients
   std::string distortion_model;
@@ -168,9 +168,9 @@ private:
   void takePicture();
 
   /// Calculates the pixel coordinates of the four corners of a target.
-  /// @param camera_extrinsics    The transform camera_T_target.
+  /// @param camera_T_target      The transform camera_T_target.
   /// @return                     Vector of corner (x, y) pixel coordinates
-  std::vector<Eigen::Vector2d> processCorners(Eigen::Affine3d camera_extrinsics);
+  std::vector<Eigen::Vector2d> processCorners(Eigen::Affine3d camera_T_target);
 
   /// Converts the single 3D point of a target's corner in the world to a 2d pixel coordinate in an images
   /// Performs rectification on distorted camera images.
