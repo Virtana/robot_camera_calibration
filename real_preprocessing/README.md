@@ -2,7 +2,7 @@
 
 ### Additional packages  
 
-* [apriltag\_ros]
+* [apriltag\_ros](https://github.com/AprilRobotics/apriltag_ros)
 * [cv\_bridge](http://wiki.ros.org/cv_bridge)
 * [tf\_conversions](http://wiki.ros.org/tf_conversions)
 
