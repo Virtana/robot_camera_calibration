@@ -14,10 +14,10 @@
 The package requires calibration of the camera for an initial guess of the camera intrinsics, to be used for OpenCV's SolvePNP function. This was done using [camera\_calibration](http://wiki.ros.org/camera_calibration). The calibration package generates a "camera.yaml" file which is used in **camera\_pose.cpp**.
 
 ### Image publishing 
-**corner\_detection.cpp** simulates image capture with user input. By default, `""` /`ENTER` is the assigned trigger for image processing and YAML dumping. The YAML file for each frame detection is dumped at the working directory named "detection_n.yml" for the nth image taken. To view the video stream detection, [image\_view](http://wiki.ros.org/image_view) was the library included. Rviz can be used alternatively with some configuration.
+**corner\_detections.cpp** simulates image capture with user input. By default, `""` /`ENTER` is the assigned trigger for image processing and YAML dumping. The YAML file for each frame detection is dumped at the working directory named "detection_n.yml" for the nth image taken. To view the video stream detection, [image\_view](http://wiki.ros.org/image_view) was the library included. Rviz can be used alternatively with some configuration.
 
 ### File handling
-**corner\_detection.cpp** generates detection YAML files in the directory in which it is called. Until a launch file is implemented, **camera\_pose.cpp** must be run in the same directory such that these YAML files can be parsed. 
+**corner\_detections.cpp** generates detection YAML files in the directory in which it is called. Until a launch file is implemented, **camera\_pose.cpp** must be run in the same directory such that these YAML files can be parsed. 
 
 ### Steps: 
 	1.  $ roscore 
