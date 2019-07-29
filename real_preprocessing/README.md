@@ -25,5 +25,5 @@ The package requires calibration of the camera for an initial guess of the camer
 	3.  $ rosrun cv_camera cv_camera_node 
 	4.  $ roslaunch apriltag_ros continuous_detection.launch camera_name:=/cv_camera image_topic:=image_raw 
 	5.  $ rosrun image_view image_view image:=tag_detections_image
-	6.  $ rosrun real_preprocessing camera_pose_node
-	7.  $ rosrun real_preprocessing corner_detection_node
+	6.  $ rosrun real_preprocessing corner_detection_node
+	7.  $ rosrun real_preprocessing camera_pose_node
