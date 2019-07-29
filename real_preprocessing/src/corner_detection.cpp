@@ -12,7 +12,7 @@ std::string capture("1");
 void yamlDump(double tag_size, int tag_id, int index)
 {
   //file name generation
-  std::string filename("detections_"+std::to_string(count)+".yml");  
+  std::string filename("detections_"+std::to_string(count)+".yaml");  
   if(index==0)
   {
     fout.open(filename.c_str());
@@ -20,8 +20,8 @@ void yamlDump(double tag_size, int tag_id, int index)
   }
 
   // yaml population format
-  fout << "\n - TargetID: " << std::to_string(tag_id); 
-  fout << "\n   size: " << std::to_string(tag_size);
+  fout << "\n - targetID: " << std::to_string(tag_id); 
+  fout << "\n   size: [ " + std::to_string(tag_size) + ", " + std::to_string(tag_size) + " ]";
   fout << "\n   corners:";
   fout << "\n    0: [ " + std::to_string(coordinate[0].first) + ", " + std::to_string(coordinate[0].second) + " ]";
   fout << "\n    1: [ " + std::to_string(coordinate[1].first) + ", " + std::to_string(coordinate[1].second) + " ]";
@@ -47,6 +47,7 @@ void aprilDetection(const apriltag_ros::AprilTagDetectionArray::ConstPtr& msg)
         }
         yamlDump(tag_size, tag_id,i);
       }
+      fout << "\n";
       fout.close();
       count++;
     }
