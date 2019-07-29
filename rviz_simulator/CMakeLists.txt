@@ -195,6 +195,10 @@ add_library(simulate_lib
   src/target.cpp
 )
 
+add_library(camera_calibration_optimizer_lib
+  src/camera_calibration_optimizer.cpp
+)
+
 ## Declare a C++ library
 #add_library(${PROJECT_NAME}
 #  src/simulate.cpp
@@ -216,6 +220,7 @@ target_link_libraries(simulate
 # synthetic_optimization
 add_executable(synthetic_optimization src/synthetic_optimization.cpp)
 target_link_libraries(synthetic_optimization
+  camera_calibration_optimizer_lib
   ${catkin_LIBRARIES} 
   ${boost_LIBRARIES}
   ${CERES_LIBRARIES}
