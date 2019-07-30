@@ -171,6 +171,6 @@ void Target::addTargetToServer()
   this->g_interactive_marker_server_->insert(this->interactive_marker_);
   this->g_interactive_marker_server_->setCallback(this->interactive_marker_.name,
                                                   boost::bind(&rviz_simulator::Target::targetFeedback, this, _1));
-  ROS_INFO_STREAM("Target " << this->marker_name_ << " added to server.\n");
+  ROS_INFO_STREAM("Target " << this->marker_name_ << " added to server.");
 }
 }

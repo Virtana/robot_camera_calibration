@@ -48,6 +48,11 @@
 // for Rotation Matrix to Rodrigues angle axis
 #include <ceres/rotation.h>
 
+// TODO: refactor using camera_calibration_parsers
+// http://docs.ros.org/api/camera_calibration_parsers/html/namespacecamera__calibration__parsers.html#a02669daad59f8986503dfaae4cc01867
+// for reading camera calibration YAML files
+// #include <camera_calibration_parsers/parse.h>
+
 #include "rviz_simulator/target.h"
 
 namespace rviz_simulator
@@ -72,7 +77,7 @@ public:
   /// camera image extremes
   int image_height;
   int image_width;
-  double min_corner_dist;  // in pixels
+  double min_corner_dist = 30;  // in pixels
   double cam_target_max_dist;
   double cam_target_min_dist;
 
@@ -80,6 +85,9 @@ public:
   std::string distortion_model;
   double k1, k2, k3, k4, k5, k6;  /// radial distortions
   double p1, p2;                  /// tangential distortions
+
+  // TODO: refactor using camera_calibration_parsers
+  // Accepts a yaml file path and populates the CameraProperties struct
 
   // getter and setter for camera_matrix
   /// Function populates the camera_matrix with the camera's intrinsic values
@@ -129,11 +137,14 @@ public:
 
 private:
   CameraProperties camera_properties_;  /// Camera properties
-  double target_x_length_;              /// The real-world x (horizontal) length of a target
-  double target_y_length_;              /// The real-world (vertical) length of a target
-  int num_pictures_;                    /// The number of pictures taken during the running of the node
-  std::string output_folder_path_;      /// absolute path of folder in which the detection yaml files are dumped
-  bool first_picture_taken_;            /// set to true when the first picture is taken
+
+  // TODO:
+  // move target length properties to the target class in order to make this configurable for each target.
+  double target_x_length_;          /// The real-world x (horizontal) length of a target
+  double target_y_length_;          /// The real-world y (vertical) length of a target
+  int num_pictures_;                /// The number of pictures taken during the running of the node
+  std::string output_folder_path_;  /// absolute path of folder in which the detection yaml files are dumped
+  bool first_picture_taken_;        /// set to true when the first picture is taken
   std::vector<Eigen::Affine3d> world_T_targets_;       /// considering index 0 as the world origin
   std::vector<Eigen::Vector4d> obj_points_in_target_;  /// corner order [bl, br, tr, tl]
 
@@ -175,10 +186,10 @@ private:
   /// Converts the single 3D point of a target's corner in the world to a 2d pixel coordinate in an images
   /// Performs rectification on distorted camera images.
   /// Follows the model used in the OpenCV camera calibration doc
-  /// @param camera_extrinsics    The transform camera_T_target.
-  /// @param point                A 3D point of a targets corner in the world frame represented as (X, Y, Z, 1).
+  /// @param camera_T_target      The transform camera_T_target.
+  /// @param point_in_target      A 3D point of a targets corner in the world frame represented as (X, Y, Z, 1).
   /// @return                     A 2D vector (u,v) representing the pixel coordinate.
-  Eigen::Vector2d calculatePixelCoords(Eigen::Affine3d camera_extrinsics, Eigen::Vector4d point);
+  Eigen::Vector2d calculatePixelCoords(Eigen::Affine3d camera_T_target, Eigen::Vector4d point_in_target);
 
   /// Checks if a single pixel coordinate is in range.
   /// @param pixelCoords      The (x,y) coordinates of a pixel in range [0 - image_width-1] and [0 - image_height-1]

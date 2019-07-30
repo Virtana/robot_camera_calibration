@@ -37,7 +37,7 @@ void CameraProperties::populateCameraMatrix()
 {
   camera_matrix.resize(3, 4);
   camera_matrix << fx, 0, cx, 0, 0, fy, cy, 0, 0, 0, 1, 0;
-  ROS_INFO("Camera matix populated.\n");
+  ROS_INFO("Camera matix populated.");
 }
 
 Eigen::MatrixXd CameraProperties::getCameraMatrix()
@@ -57,13 +57,15 @@ Camera::Camera(const std::string marker_frame_id, const std::string marker_name,
   this->camera_properties_ = camera_properties;
   this->camera_properties_.populateCameraMatrix();
 
+  // TODO
+  // move target length properties to the target class in order to make this configurable for each target.
   this->target_x_length_ = target_scale;
   this->target_y_length_ = target_scale;
   this->initObjPointsInTarget();
 
   // adding a shutter release button to the camera
   this->interactive_marker_.controls[0].interaction_mode = visualization_msgs::InteractiveMarkerControl::BUTTON;
-  ROS_INFO("Camera shutter button added.\n");
+  ROS_INFO("Camera shutter button added.");
 
   this->makeOutputDirectories();
 
@@ -83,17 +85,17 @@ Camera::~Camera()
 void Camera::initObjPointsInTarget()
 {
   Eigen::Vector4d c0, c1, c2, c3;
-  c0 << -this->target_x_length_/ 2, -this->target_y_length_/ 2, 0, 1;  // old c0
-  c3 << -this->target_x_length_/ 2, this->target_y_length_/ 2, 0, 1;   // old c1
-  c2 << this->target_x_length_/ 2, this->target_y_length_/ 2, 0, 1;    // old c2
-  c1 << this->target_x_length_/ 2, -this->target_y_length_/ 2, 0, 1;   // old c3
+  c0 << -this->target_x_length_ / 2, -this->target_y_length_ / 2, 0, 1;  // old c0
+  c3 << -this->target_x_length_ / 2, this->target_y_length_ / 2, 0, 1;   // old c1
+  c2 << this->target_x_length_ / 2, this->target_y_length_ / 2, 0, 1;    // old c2
+  c1 << this->target_x_length_ / 2, -this->target_y_length_ / 2, 0, 1;   // old c3
 
   this->obj_points_in_target_.push_back(c0);
   this->obj_points_in_target_.push_back(c1);
   this->obj_points_in_target_.push_back(c2);
   this->obj_points_in_target_.push_back(c3);
 
-  ROS_INFO("Object points in target calculated.\n");
+  ROS_INFO("Object points in target calculated.");
 }
 
 void Camera::makeOutputDirectories()
@@ -119,7 +121,7 @@ void Camera::makeOutputDirectories()
     ROS_ERROR_STREAM("Error :  " << strerror(errno) << std::endl);
 
   else
-    ROS_INFO_STREAM("Output directory created sucessfully: " << this->output_folder_path_.c_str() << std::endl);
+    ROS_INFO_STREAM("Output directory created sucessfully: " << this->output_folder_path_.c_str());
 }
 
 void Camera::addCameraToServer()
@@ -127,7 +129,7 @@ void Camera::addCameraToServer()
   this->g_interactive_marker_server_->insert(this->interactive_marker_);
   this->g_interactive_marker_server_->setCallback(this->interactive_marker_.name,
                                                   boost::bind(&rviz_simulator::Camera::cameraFeedback, this, _1));
-  ROS_INFO_STREAM("Camera added to interactive marker server.\n");
+  ROS_INFO_STREAM("Camera added to interactive marker server.");
 }
 
 void Camera::cameraFeedback(const visualization_msgs::InteractiveMarkerFeedbackConstPtr& feedback)
@@ -216,12 +218,15 @@ void Camera::takePicture()
       {
         detections_out << YAML::BeginMap;  // target
         detections_out << YAML::Key << "targetID" << YAML::Value << std::to_string(i);
+        std::vector<double> size = { this->target_x_length_, this->target_y_length_ };
+        detections_out << YAML::Key << "size" << YAML::Value << YAML::Flow << size;
         detections_out << YAML::Key << "corners";
         detections_out << YAML::Value << YAML::BeginMap;  // corners
         for (int i = 0; i < corners.size(); i++)
         {
+          std::vector<double> corner = { corners[i].x(), corners[i].y() };
           detections_out << YAML::Key << i;
-          detections_out << YAML::Value << YAML::BeginSeq << int(corners[i][0]) << int(corners[i][1]) << YAML::EndSeq;
+          detections_out << YAML::Value << YAML::Flow << corner;
         }
         detections_out << YAML::EndMap;  // corners
         detections_out << YAML::EndMap;  // target
@@ -268,9 +273,9 @@ std::vector<Eigen::Vector2d> Camera::processCorners(Eigen::Affine3d camera_T_tar
   return corners2d;
 }
 
-Eigen::Vector2d Camera::calculatePixelCoords(Eigen::Affine3d camera_T_target, Eigen::Vector4d point_in_tag)
+Eigen::Vector2d Camera::calculatePixelCoords(Eigen::Affine3d camera_T_target, Eigen::Vector4d point_in_target)
 {
-  Eigen::Vector4d point_in_camera = camera_T_target * point_in_tag;
+  Eigen::Vector4d point_in_camera = camera_T_target * point_in_target;
 
   // scaling
   double x_prime = (point_in_camera[0] / point_in_camera[2]);
@@ -309,10 +314,10 @@ bool Camera::isWithinImage(Eigen::Vector2d pixelCoords)
   if (pixelCoords.x() >= 0 && pixelCoords.x() < this->camera_properties_.image_width && pixelCoords.y() >= 0 &&
       pixelCoords.y() < this->camera_properties_.image_height)
   {
-    ROS_INFO_STREAM("Valid corner coordinate\n");
+    ROS_INFO_STREAM("Corner is within image\n");
     return true;
   }
-  ROS_INFO_STREAM("Invalid corner coordinate\n");
+  ROS_INFO_STREAM("Corner is outside image\n");
   return false;
 }
 
@@ -329,7 +334,7 @@ bool Camera::isInFrontOfCamera(Eigen::Affine3d camera_T_target)
 
 bool Camera::isInFrontOfTarget(Eigen::Affine3d target_T_camera)
 {
-  if (target_T_camera.translation().y() > 0)
+  if (target_T_camera.translation().z() > 0)
   {
     ROS_INFO_STREAM("Camera in front of target\n");
     return true;
@@ -374,11 +379,13 @@ void Camera::dumpCameraPropertiesToYAMLFile(std::string output_file_name)
   out << YAML::BeginMap;  // camera matrix map
   out << YAML::Key << "rows" << YAML::Value << 3;
   out << YAML::Key << "cols" << YAML::Value << 3;
-  out << YAML::Key << "data" << YAML::Value;
-  out << YAML::BeginSeq;  // camera matrix data sequence
-  out << camera_properties_.fx << 0 << camera_properties_.cx << 0 << camera_properties_.fy << camera_properties_.cy << 0
-      << 0 << 1;
-  out << YAML::EndSeq;  // camera matrix data sequence
+
+  // RowMajor
+  std::vector<double> camera_matrix_data = {
+    camera_properties_.fx, 0, camera_properties_.cx, 0, camera_properties_.fy, camera_properties_.cy, 0, 0, 1
+  };
+
+  out << YAML::Key << "data" << YAML::Value << YAML::Flow << camera_matrix_data;
   out << YAML::EndMap;  // camera matrix map
 
   // distortions
@@ -387,11 +394,11 @@ void Camera::dumpCameraPropertiesToYAMLFile(std::string output_file_name)
   out << YAML::BeginMap;  // distortion coefficitents map
   out << YAML::Key << "rows" << YAML::Value << 1;
   out << YAML::Key << "cols" << YAML::Value << 5;
-  out << YAML::Key << "data" << YAML::Value;
-  out << YAML::BeginSeq;  // distortion coefficients data sequence
-  out << camera_properties_.k1 << camera_properties_.k2 << camera_properties_.p1 << camera_properties_.p2
-      << camera_properties_.k3;
-  out << YAML::EndSeq;  // distortion coefficients data sequence
+
+  std::vector<double> distortion_coefficients = { camera_properties_.k1, camera_properties_.k2, camera_properties_.p1,
+                                                  camera_properties_.p2, camera_properties_.k3 };
+
+  out << YAML::Key << "data" << YAML::Value << YAML::Flow << distortion_coefficients;
   out << YAML::EndMap;  // distortion coefficitents map
 
   // rectification matrix (omitted)
@@ -410,7 +417,7 @@ void Camera::dumpCameraPropertiesToYAMLFile(std::string output_file_name)
   else
   {
     fout << out.c_str();
-    ROS_INFO_STREAM("Camera properties dumped to " << camera_file_path << "\n");
+    ROS_INFO_STREAM("Camera properties dumped to " << camera_file_path);
   }
   fout.close();
 }
@@ -490,7 +497,8 @@ void Camera::ObjPointsInTargetToYAML(YAML::Emitter& out)
   for (int i = 0; i < this->obj_points_in_target_.size(); i++)
   {
     Eigen::Vector4d point = this->obj_points_in_target_[i];
-    out << YAML::Key << i << YAML::Value << YAML::BeginSeq << point.x() << point.y() << point.z() << YAML::EndSeq;
+    std::vector<double> p = { point.x(), point.y(), point.z() };
+    out << YAML::Key << i << YAML::Value << YAML::Flow << p;
   }
   out << YAML::EndMap;
 }
