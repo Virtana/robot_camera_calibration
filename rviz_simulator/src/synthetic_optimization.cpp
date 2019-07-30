@@ -38,6 +38,7 @@
 
 /* TODO:
  * 
+ * hardcoded for plumb-bob model
  * write inverse transform function
  * Output to YAML
  * templating the YAML-cpp readers to read automatically/refactoring the save methods
@@ -81,6 +82,7 @@ int main(int argc, char** argv)
   camera_calibration::CameraCalibrationOptimizer camera_calibration_optimizer(detections_directory_name);
   camera_calibration_optimizer.optimize();
   camera_calibration_optimizer.printResultsToConsole();
+  camera_calibration_optimizer.writeResultsToYAML();
   
   return 0;
 }

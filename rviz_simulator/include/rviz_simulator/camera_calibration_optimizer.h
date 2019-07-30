@@ -42,6 +42,8 @@
 #include <ros/ros.h>
 #include <ros/package.h>
 
+#include <fstream>
+
 #include "ceres/ceres.h"
 #include "ceres/rotation.h"
 
@@ -55,6 +57,9 @@
 // for making directories
 #include <sys/stat.h>
 #include <sys/types.h>
+
+// for outputting camera calibration properties to YAML
+#include <camera_calibration_parsers/parse.h>
 
 
 namespace camera_calibration
@@ -139,16 +144,16 @@ public:
   void printResultsToConsole();
   
   // Function outputs the optimization results to YAML files (screen)
-  void printResultsToYAML(std::string output_directory_path);
+  void writeResultsToYAML();
 
 private:
-  // fields
-  std::string detections_directory_path;
-  std::array<double, CAMERA_INTRINSICS_SIZE> camera_intrinsics;
-  std::array<double, CAMERA_INTRINSICS_SIZE> initial_intrinsics;
-  std::map<int, Target> targets;
-  std::vector<Picture> pictures;
-  ceres::Problem bundleAdjustmentProblem;
+  // members
+  std::string detections_directory_path_;
+  std::array<double, CAMERA_INTRINSICS_SIZE> camera_intrinsics_; // [fx, fy, cx, cy, k1, k2, p1, p2, k3]
+  std::array<double, CAMERA_INTRINSICS_SIZE> initial_intrinsics_;
+  std::map<int, Target> targets_;
+  std::vector<Picture> pictures_;
+  ceres::Problem bundle_adjustment_problem_;
 
   // methods
   // gets the directory path that contains all the picture files (E.g. detection_0.yaml)
@@ -168,18 +173,21 @@ private:
   // Function creates a ceres::Problem object and adds residual blocks from the bundle adjustment problem
   void buildBundleAdjustmentProblem();
 
+  // FIXME: undefined reference cmake error
+  // void cameraToYAML();
+
+  void targetsToYAML();
   ///////////////////////////////////////////////////////////////// debugging functions ////////////////
-  // print vector
   template <typename T>
   void printVector(std::vector<T> data);
 
-  // print std::array
   template <typename T, std::size_t N>
   void printStdArray(std::array<T, N> data);
 
   void printTargets(std::map<int, Target> targets);
 
   void printPictures(std::vector<Picture> pictures);
+  ///////////////////////////////////////////////////////////////// debugging functions ////////////////
 };
 }
 

@@ -1,13 +1,15 @@
 <launch>
+  <!-- args -->
+  <arg name="camera_intrinsics_file" default="photoneo_camera_intrinsics.yaml"/>
+  <arg name="debug_mode" default="false"/>
+
   <!-- loading values into the ros parameter server -->
   <rosparam command="load" file="$(find rviz_simulator)/config/initialize_simulator.yaml" />
 
   <!-- adding a command line arg for camera intrinsics file -->
-  <arg name="camera_intrinsics_file" default="photoneo_camera_intrinsics.yaml"/>
   <rosparam command="load" file="$(find rviz_simulator)/config/$(arg camera_intrinsics_file)" />
   
   <!-- adding a command line arg for debug mode -->
-  <arg name="debug_mode" default="false"/>
   <group if="$(arg debug_mode)">
     <node pkg="rqt_console" type="rqt_console" name="rqt_console"/>
     <node pkg="rqt_logger_level" type="rqt_logger_level" name="rqt_logger_level"/>

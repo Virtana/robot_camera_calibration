@@ -1,6 +1,6 @@
 image_width: 1280
 image_height: 720
-camera_name: "Realsense Camera (Camera)"
+camera_name: "Realsense Camera"
 near_clip: 0.1      # remove this
 far_clip: 5         # remove this
 camera_matrix:

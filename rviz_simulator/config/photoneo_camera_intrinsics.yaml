@@ -1,6 +1,6 @@
 image_width: 1032
 image_height: 772
-camera_name: "Photoneo (Camera)"
+camera_name: "Photoneo Camera"
 camera_matrix:
   rows: 3
   cols: 3
