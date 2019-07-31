@@ -59,7 +59,7 @@
 #include <sys/types.h>
 
 // for outputting camera calibration properties to YAML
-#include <camera_calibration_parsers/parse.h>
+#include <camera_calibration_parsers/parse_yml.h>
 
 
 namespace camera_calibration
@@ -174,7 +174,7 @@ private:
   void buildBundleAdjustmentProblem();
 
   // FIXME: undefined reference cmake error
-  // void cameraToYAML();
+  void cameraToYAML();
 
   void targetsToYAML();
   ///////////////////////////////////////////////////////////////// debugging functions ////////////////

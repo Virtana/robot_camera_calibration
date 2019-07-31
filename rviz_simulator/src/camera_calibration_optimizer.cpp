@@ -382,13 +382,15 @@ void CameraCalibrationOptimizer::printResultsToConsole()
 
 // Reads the original camera.yaml file into CameraInfo object using camera_calibration_parser
 // Edits in optimized values in the object then outputs back to a YAML file
-/*
 void CameraCalibrationOptimizer::cameraToYAML()
 {
+
   std::string old_camera_file_path = this->detections_directory_path_+"/camera.yaml";
-  std::string camera_name;
+  ROS_INFO_STREAM("Cam file: " << old_camera_file_path);
+  std::string camera_name = "X";
   sensor_msgs::CameraInfo camera_info;
-  if(!camera_calibration_parsers::readCalibration(old_camera_file_path, camera_name, camera_info))
+
+  if(!camera_calibration_parsers::readCalibrationYml(old_camera_file_path, camera_name, camera_info))
   {
     ROS_ERROR_STREAM("Camera file read error: " << old_camera_file_path);
     ros::shutdown();
@@ -396,8 +398,8 @@ void CameraCalibrationOptimizer::cameraToYAML()
   
   boost::array<double, CAMERA_INTRINSICS_SIZE> K = 
   {
-    this->camera_intrinsics_[0], 0, this->camera_intrinsics_[1],
-    0, this->camera_intrinsics_[2], this->camera_intrinsics_[3],
+    this->camera_intrinsics_[0], 0, this->camera_intrinsics_[2],
+    0, this->camera_intrinsics_[1], this->camera_intrinsics_[3],
     0, 0, 1
   };
   camera_info.K = K;
@@ -413,13 +415,13 @@ void CameraCalibrationOptimizer::cameraToYAML()
   camera_info.D = D;
 
   std::string new_camera_file_path = this->detections_directory_path_+"/optimized/camera.yaml";
-  if(!camera_calibration_parsers::writeCalibration(new_camera_file_path, camera_name, camera_info))
+  if(!camera_calibration_parsers::writeCalibrationYml(new_camera_file_path, camera_name, camera_info))
   {
     ROS_ERROR_STREAM("Camera file write error: " << old_camera_file_path);
     ros::shutdown();
   }
 }
-*/
+
 
 void targetToYAML(Target target, YAML::Emitter &out)
 {
@@ -464,7 +466,7 @@ void CameraCalibrationOptimizer::targetsToYAML()
   // writing to targets.yamls
   std::string output_file_path = this->detections_directory_path_+"/optimized/targets.yaml";
   std::ofstream fout(output_file_path);
-  if (!fout)
+  if (!fout.good())
   {
     ROS_ERROR_STREAM("Error writing to targets.yaml:  " << strerror(errno) << std::endl);
   }
@@ -478,12 +480,12 @@ void CameraCalibrationOptimizer::writeResultsToYAML()
   std::string output_directory_path = this->detections_directory_path_ + "/optimized";
   if (mkdir(output_directory_path.c_str(), 0777) == -1)
   {
-    ROS_WARN_STREAM("Error making output directory :  " << strerror(errno) << std::endl);
+    ROS_WARN_STREAM("Making output directory :  " << strerror(errno) << std::endl);
     // ros::shutdown();
   }
 
   // writes optimized camera info to YAML file
-  // this->cameraToYAML(); 
+  this->cameraToYAML(); 
   this->targetsToYAML();
 }
 
@@ -514,17 +516,10 @@ void CameraCalibrationOptimizer::printTargets(std::map<int, Target> targets)
 {
   std::map<int, Target>::iterator itr;
   for(itr = targets.begin(); itr != targets.end(); ++itr){
-    //  const YAML::Node& target_node = *target_iterator;
     const Target target = itr->second;
     ROS_INFO_STREAM("targetID: " << itr->first);
     ROS_INFO_STREAM("world_T_target: ");
     printStdArray(target.world_T_target);
-    // ROS_INFO_STREAM("obj_points_in_target: ");
-    // for (int j = 0; j < target.obj_points_in_target.size(); j++)
-    // {
-    //   ROS_INFO_STREAM("Corner index: " << j);
-    //   printStdArray(target.obj_points_in_target[j]);
-    // }
   }
 }
 

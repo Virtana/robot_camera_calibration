@@ -15,6 +15,9 @@ Run `catkin_make` in the root of your workspace to build the `rviz_simulator` pa
 - YAML-cpp [Installation Instructions](https://github.com/jbeder/yaml-cpp)
 - Eigen [Installation Instructions](http://eigen.tuxfamily.org/dox/GettingStarted.html)
 - Ceres [Installation Instructions](http://ceres-solver.org/installation.html)
+- [ros-perception/image_common](https://github.com/ros-perception/image_common/tree/1.11.13) 
+  - Clone the `image_common` repo into your catkin workspace `src` folder. 
+  - Add "`add_compile_options(-std=c++11)`" to the `camera_calibration_parsers` CMakeLists.txt
 
 ## Execution Instructions
 Edit the `initialize_simulator.yaml` file to change the simulator configuration.
