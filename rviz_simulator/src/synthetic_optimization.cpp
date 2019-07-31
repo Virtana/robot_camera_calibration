@@ -38,12 +38,10 @@
 
 /* TODO:
  * 
+ * fix optimize.launch
  * hardcoded for plumb-bob model
- * write inverse transform function
- * Output to YAML
  * templating the YAML-cpp readers to read automatically/refactoring the save methods
  * Use a YAML conversions class for all other nodes
- * Output to YAML
  * exception handling
  *
  */
@@ -57,7 +55,7 @@ std::string getDetectionsDirectoryPath(ros::NodeHandle& n)
   if (!n.getParam("dir_name", detections_directory_name))
   {
     ROS_ERROR("Detections directory name not specified.\n");
-    exit(-1);
+    ros::shutdown();
   }
 
   // checking existance of detections directory
@@ -67,7 +65,7 @@ std::string getDetectionsDirectoryPath(ros::NodeHandle& n)
   if (stat(detections_directory_path.c_str(), &info) != 0)
   {
     ROS_ERROR("Detections directory read error.\n");
-    exit(-1);
+    ros::shutdown();
   }
 
   return detections_directory_path;
@@ -78,11 +76,11 @@ int main(int argc, char** argv)
   ros::init(argc, argv, "synthetic_optimization");
   ros::NodeHandle n("~");
 
-  std::string detections_directory_name = getDetectionsDirectoryPath(n);
-  camera_calibration::CameraCalibrationOptimizer camera_calibration_optimizer(detections_directory_name);
+  std::string detections_directory_path = getDetectionsDirectoryPath(n);
+  camera_calibration::CameraCalibrationOptimizer camera_calibration_optimizer(detections_directory_path);
   camera_calibration_optimizer.optimize();
-  camera_calibration_optimizer.printResultsToConsole();
+  // camera_calibration_optimizer.printResultsToConsole();
   camera_calibration_optimizer.writeResultsToYAML();
-  
+
   return 0;
 }

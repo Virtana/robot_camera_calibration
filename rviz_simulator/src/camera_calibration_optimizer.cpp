@@ -53,10 +53,11 @@ ReProjectionResidual::ReProjectionResidual(const double* observed_pixel_coordina
 }
 
 template <typename T>
-bool ReProjectionResidual::operator()(const T* const camera_intrinsics, const T* const camera_T_world, const T* const world_T_target, T* residuals) const
+bool ReProjectionResidual::operator()(const T* const camera_intrinsics, const T* const camera_T_world,
+                                      const T* const world_T_target, T* residuals) const
 {
   const T point[3] = { T(this->obj_point_in_target[0]), T(this->obj_point_in_target[1]),
-                        T(this->obj_point_in_target[2]) };
+                       T(this->obj_point_in_target[2]) };
 
   T p[3];
 
@@ -99,10 +100,8 @@ bool ReProjectionResidual::operator()(const T* const camera_intrinsics, const T*
   T denominator = T(1) + k4 * r_raise_2 + k5 * r_raise_4 + k6 * r_raise_6;
   T coefficient = numerator / denominator;
 
-  T x_double_prime =
-      x_prime * coefficient + T(2) * p1 * x_prime * y_prime + p2 * (r_raise_2 + T(2) * x_prime_squared);
-  T y_double_prime =
-      y_prime * coefficient + p1 * (r_raise_2 + T(2) * y_prime_squared) + T(2) * p2 * x_prime * y_prime;
+  T x_double_prime = x_prime * coefficient + T(2) * p1 * x_prime * y_prime + p2 * (r_raise_2 + T(2) * x_prime_squared);
+  T y_double_prime = y_prime * coefficient + p1 * (r_raise_2 + T(2) * y_prime_squared) + T(2) * p2 * x_prime * y_prime;
 
   T u = fx * x_double_prime + cx;
   T v = fy * y_double_prime + cy;
@@ -123,16 +122,15 @@ static ceres::CostFunction* Create(const double* observed_pixel_coordinates, con
 CameraCalibrationOptimizer::CameraCalibrationOptimizer(std::string detections_directory_path)
 {
   this->detections_directory_path_ = detections_directory_path;
-  this->camera_intrinsics_ = this->getCameraIntrinsics(this->detections_directory_path_+"/camera.yaml");
+  this->camera_intrinsics_ = this->getCameraIntrinsics(this->detections_directory_path_ + "/camera.yaml");
   this->initial_intrinsics_ = this->camera_intrinsics_;
-  this->targets_ = this->getTargets(this->detections_directory_path_+"/targets.yaml");
+  this->targets_ = this->getTargets(this->detections_directory_path_ + "/targets.yaml");
   this->pictures_ = this->getPictures(this->detections_directory_path_);
 }
 
 CameraCalibrationOptimizer::~CameraCalibrationOptimizer()
 {
 }
-
 
 std::array<double, CAMERA_INTRINSICS_SIZE> CameraCalibrationOptimizer::getCameraIntrinsics(std::string camera_file_path)
 {
@@ -163,56 +161,64 @@ std::array<double, CAMERA_INTRINSICS_SIZE> CameraCalibrationOptimizer::getCamera
   return camera_intrinsics;
 }
 
+std::array<double, 6> reference_T_TargetInverse(std::array<double, 6> reference_T_Target)
+{
+  std::array<double, 6> reference_T_target_inverse;
+
+  // getting rodrigues angle axis rotation and converting to Eigen::Matrix3d
+  std::array<double, 3> rodrigues_angle_axis = { reference_T_Target[0], reference_T_Target[1], reference_T_Target[2] };
+  double rotation_array[9];
+  ceres::AngleAxisToRotationMatrix(rodrigues_angle_axis.data(), rotation_array);  // column major
+  Eigen::Matrix3d rotation_matrix = Eigen::Map<Eigen::Matrix3d>(rotation_array);
+
+  // getting translation and converting to Eigen::Vector3d
+  std::array<double, 3> translation = { reference_T_Target[3], reference_T_Target[4], reference_T_Target[5] };
+  Eigen::Vector3d translation_vector = Eigen::Map<Eigen::Vector3d>(translation.data());
+
+  // combining rotation matrix and translation vector to Eigen::Affine3d
+  Eigen::Affine3d transform;
+  transform.translation() = translation_vector;
+  transform.linear() = rotation_matrix;
+
+  // inverting the transform
+  Eigen::Affine3d transform_inverse = transform.inverse();
+
+  // converting from rotation matrix back to rodriguez angle axis
+  ceres::RotationMatrixToAngleAxis(transform_inverse.rotation().data(), rodrigues_angle_axis.data());
+
+  // storing in an std::array
+  reference_T_target_inverse[0] = rodrigues_angle_axis[0];
+  reference_T_target_inverse[1] = rodrigues_angle_axis[1];
+  reference_T_target_inverse[2] = rodrigues_angle_axis[2];
+
+  reference_T_target_inverse[3] = transform_inverse.translation().x();
+  reference_T_target_inverse[4] = transform_inverse.translation().y();
+  reference_T_target_inverse[5] = transform_inverse.translation().z();
+
+  return reference_T_target_inverse;
+}
+
 std::array<double, 6> getReference_T_Target(const YAML::Node& node, std::string reference_T_target_name, bool inverse)
 {
   std::array<double, 6> reference_T_target;
 
+  reference_T_target[0] = node[reference_T_target_name]["rotation"][0].as<double>();
+  reference_T_target[1] = node[reference_T_target_name]["rotation"][1].as<double>();
+  reference_T_target[2] = node[reference_T_target_name]["rotation"][2].as<double>();
+
+  reference_T_target[3] = node[reference_T_target_name]["translation"][0].as<double>();
+  reference_T_target[4] = node[reference_T_target_name]["translation"][1].as<double>();
+  reference_T_target[5] = node[reference_T_target_name]["translation"][2].as<double>();
+
   if (inverse)
   {
-    // getting rodrigues angle axis rotation and converting to Eigen::Matrix3d
-    std::array<double, 3> rodrigues_angle_axis = node[reference_T_target_name]["rotation"].as<std::array<double, 3>>();
-    double rotation_array[9];
-    ceres::AngleAxisToRotationMatrix(rodrigues_angle_axis.data(), rotation_array);
-    Eigen::Matrix3d rotation_matrix = Eigen::Map<Eigen::Matrix3d>(rotation_array);
-
-    // getting translation and converting to Eigen::Vector3d
-    std::array<double, 3> translation = node[reference_T_target_name]["translation"].as<std::array<double, 3>>();
-    Eigen::Vector3d translation_vector = Eigen::Map<Eigen::Vector3d>(translation.data());
-
-    // combining rotation matrix and translation vector to Eigen::Affine3d
-    Eigen::Affine3d transform;
-    transform.translation() = translation_vector;
-    transform.linear() = rotation_matrix;
-
-    // inverting the transform
-    Eigen::Affine3d transform_inverse = transform.inverse();
-
-    // converting from rotation matrix back to rodriguez angle axis
-    ceres::RotationMatrixToAngleAxis(transform_inverse.rotation().data(), rodrigues_angle_axis.data());
-
-    // storing in an std::array
-    reference_T_target[0] = rodrigues_angle_axis[0];
-    reference_T_target[1] = rodrigues_angle_axis[1];
-    reference_T_target[2] = rodrigues_angle_axis[2];
-
-    reference_T_target[3] = transform_inverse.translation().x();
-    reference_T_target[4] = transform_inverse.translation().y();
-    reference_T_target[5] = transform_inverse.translation().z();
+    return reference_T_TargetInverse(reference_T_target);
   }
   else
   {
-    reference_T_target[0] = node[reference_T_target_name]["rotation"][0].as<double>();
-    reference_T_target[1] = node[reference_T_target_name]["rotation"][1].as<double>();
-    reference_T_target[2] = node[reference_T_target_name]["rotation"][2].as<double>();
-
-    reference_T_target[3] = node[reference_T_target_name]["translation"][0].as<double>();
-    reference_T_target[4] = node[reference_T_target_name]["translation"][1].as<double>();
-    reference_T_target[5] = node[reference_T_target_name]["translation"][2].as<double>();
+    return reference_T_target;
   }
-
-  return reference_T_target;
 }
-
 
 std::map<int, Target> CameraCalibrationOptimizer::getTargets(std::string targets_directory_path)
 {
@@ -251,7 +257,7 @@ std::map<int, Target> CameraCalibrationOptimizer::getTargets(std::string targets
   return targets;
 }
 
-// returns a single detection from the YAML file
+/// Helper function, returns a single detection from the YAML file
 Detection getDetection(const YAML::Node& detection_node)
 {
   Detection detection;
@@ -265,7 +271,7 @@ Detection getDetection(const YAML::Node& detection_node)
   return detection;
 }
 
-// returns a vector of all detections from a given YAML file
+/// Helper function, returns a vector of all detections from a given YAML file
 std::vector<Detection> getDetections(const YAML::Node& detections_node)
 {
   std::vector<Detection> detections;
@@ -277,8 +283,11 @@ std::vector<Detection> getDetections(const YAML::Node& detections_node)
   return detections;
 }
 
-// returns a picture from a single YAML file
-Picture getPicture(std::string picture_file_path)
+/// Helper function, returns a picture from a single YAML file
+/// @param picture_file_path
+/// @param file_name
+/// @return
+Picture getPicture(std::string picture_file_path, std::string file_name)
 {
   YAML::Node picture_node = YAML::LoadFile(picture_file_path);
   if (!picture_node)
@@ -287,15 +296,17 @@ Picture getPicture(std::string picture_file_path)
   }
 
   Picture picture;
+  picture.file_name = file_name;
   picture.world_T_camera = getReference_T_Target(picture_node, "world_T_camera", false);
   picture.camera_T_world = getReference_T_Target(picture_node, "world_T_camera", true);
   picture.detections = getDetections(picture_node["detections"]);
   return picture;
 }
 
-
-// searches a given directory
-// returns the list of detection entites (an entity is a directory or file) with the substring "detections"
+/// Helper function, searches a given directory
+/// @param directory_path
+/// @param entity_type
+/// @return the list of detection entites (an entity is a directory or file) with the substring "detections"
 std::vector<std::string> getDetectionEntityNames(std::string directory_path, unsigned char entity_type)
 {
   std::vector<std::string> detection_entities;
@@ -325,7 +336,7 @@ std::vector<Picture> CameraCalibrationOptimizer::getPictures(std::string detecti
   std::vector<Picture> pictures;
   for (auto detection_file_name : detection_file_names)
   {
-    Picture picture = getPicture(detections_directory_path + "/" + detection_file_name);
+    Picture picture = getPicture(detections_directory_path + "/" + detection_file_name, detection_file_name);
     if (!picture.detections.empty())
     {
       pictures.push_back(picture);
@@ -349,10 +360,11 @@ void CameraCalibrationOptimizer::buildBundleAdjustmentProblem()
       {
         ceres::CostFunction* cost_function =
             Create(this->pictures_[p].detections[d].corners[c].data(),
-                                         this->targets_.at(pictures_[p].detections[d].targetID).obj_points_in_target[c].data());
+                   this->targets_.at(pictures_[p].detections[d].targetID).obj_points_in_target[c].data());
 
-        this->bundle_adjustment_problem_.AddResidualBlock(cost_function, NULL, this->camera_intrinsics_.data(), this->pictures_[p].camera_T_world.data(),
-                                 this->targets_.at(this->pictures_[p].detections[d].targetID).world_T_target.data());
+        this->bundle_adjustment_problem_.AddResidualBlock(
+            cost_function, NULL, this->camera_intrinsics_.data(), this->pictures_[p].camera_T_world.data(),
+            this->targets_.at(this->pictures_[p].detections[d].targetID).world_T_target.data());
       }
     }
   }
@@ -384,68 +396,65 @@ void CameraCalibrationOptimizer::printResultsToConsole()
 // Edits in optimized values in the object then outputs back to a YAML file
 void CameraCalibrationOptimizer::cameraToYAML()
 {
-
-  std::string old_camera_file_path = this->detections_directory_path_+"/camera.yaml";
-  ROS_INFO_STREAM("Cam file: " << old_camera_file_path);
-  std::string camera_name = "X";
+  std::string old_camera_file_path = this->detections_directory_path_ + "/camera.yaml";
+  std::string camera_name;
   sensor_msgs::CameraInfo camera_info;
 
-  if(!camera_calibration_parsers::readCalibrationYml(old_camera_file_path, camera_name, camera_info))
+  if (!camera_calibration_parsers::readCalibrationYml(old_camera_file_path, camera_name, camera_info))
   {
     ROS_ERROR_STREAM("Camera file read error: " << old_camera_file_path);
     ros::shutdown();
   }
-  
-  boost::array<double, CAMERA_INTRINSICS_SIZE> K = 
-  {
-    this->camera_intrinsics_[0], 0, this->camera_intrinsics_[2],
-    0, this->camera_intrinsics_[1], this->camera_intrinsics_[3],
-    0, 0, 1
-  };
+
+  boost::array<double, CAMERA_INTRINSICS_SIZE> K = { this->camera_intrinsics_[0],
+                                                     0,
+                                                     this->camera_intrinsics_[2],
+                                                     0,
+                                                     this->camera_intrinsics_[1],
+                                                     this->camera_intrinsics_[3],
+                                                     0,
+                                                     0,
+                                                     1 };
   camera_info.K = K;
 
-  std::vector<double> D = 
-  {
-    this->camera_intrinsics_[4],
-    this->camera_intrinsics_[5],
-    this->camera_intrinsics_[6],
-    this->camera_intrinsics_[7],
-    this->camera_intrinsics_[8]
-  };
+  std::vector<double> D = { this->camera_intrinsics_[4], this->camera_intrinsics_[5], this->camera_intrinsics_[6],
+                            this->camera_intrinsics_[7], this->camera_intrinsics_[8] };
   camera_info.D = D;
 
-  std::string new_camera_file_path = this->detections_directory_path_+"/optimized/camera.yaml";
-  if(!camera_calibration_parsers::writeCalibrationYml(new_camera_file_path, camera_name, camera_info))
+  std::string new_camera_file_path = this->detections_directory_path_ + "/optimized/camera.yaml";
+  if (!camera_calibration_parsers::writeCalibrationYml(new_camera_file_path, camera_name, camera_info))
   {
     ROS_ERROR_STREAM("Camera file write error: " << old_camera_file_path);
     ros::shutdown();
   }
 }
 
-
-void targetToYAML(Target target, YAML::Emitter &out)
+void targetToYAML(Target target, YAML::Emitter& out)
 {
-  out << YAML::BeginMap; // 0
+  out << YAML::BeginMap;  // 0
   out << YAML::Key << "targetID" << YAML::Value << target.targetID;
   out << YAML::Key << "world_T_target" << YAML::Value;
 
-  out << YAML::BeginMap; // 1
-  std::vector<double> rotation = { target.world_T_target[0], target.world_T_target[1], target.world_T_target[2] };;
+  out << YAML::BeginMap;  // 1
+  std::vector<double> rotation = { target.world_T_target[0], target.world_T_target[1], target.world_T_target[2] };
+  ;
   out << YAML::Key << "rotation" << YAML::Value << YAML::Flow << rotation;
-  std::vector<double> translation = { target.world_T_target[3], target.world_T_target[4], target.world_T_target[5] };;
+  std::vector<double> translation = { target.world_T_target[3], target.world_T_target[4], target.world_T_target[5] };
+  ;
   out << YAML::Key << "translation" << YAML::Value << YAML::Flow << translation;
-  out << YAML::EndMap; // 1
+  out << YAML::EndMap;  // 1
 
   out << YAML::Key << "obj_points_in_target" << YAML::Value;
-  out << YAML::BeginMap; // 1
-  for(int i = 0; i < target.obj_points_in_target.size(); i++)
+  out << YAML::BeginMap;  // 1
+  for (int i = 0; i < target.obj_points_in_target.size(); i++)
   {
-    std::vector<double> obj_points_in_target(target.obj_points_in_target[i].begin(), target.obj_points_in_target[i].end());
+    std::vector<double> obj_points_in_target(target.obj_points_in_target[i].begin(),
+                                             target.obj_points_in_target[i].end());
     out << YAML::Key << i << YAML::Value << YAML::Flow << obj_points_in_target;
   }
-  out << YAML::EndMap; // 1
+  out << YAML::EndMap;  // 1
 
-  out << YAML::EndMap; // 0
+  out << YAML::EndMap;  // 0
 }
 
 void CameraCalibrationOptimizer::targetsToYAML()
@@ -455,16 +464,15 @@ void CameraCalibrationOptimizer::targetsToYAML()
   targets_out << YAML::Key << "targets" << YAML::Value << YAML::BeginSeq;
 
   std::map<int, Target>::iterator itr;
-  for(itr = this->targets_.begin(); itr != this->targets_.end(); ++itr)
+  for (itr = this->targets_.begin(); itr != this->targets_.end(); ++itr)
   {
     targetToYAML(itr->second, targets_out);
   }
   targets_out << YAML::EndSeq;
   targets_out << YAML::EndMap;
 
-
-  // writing to targets.yamls
-  std::string output_file_path = this->detections_directory_path_+"/optimized/targets.yaml";
+  // writing to targets.yaml
+  std::string output_file_path = this->detections_directory_path_ + "/optimized/targets.yaml";
   std::ofstream fout(output_file_path);
   if (!fout.good())
   {
@@ -472,6 +480,38 @@ void CameraCalibrationOptimizer::targetsToYAML()
   }
   fout << targets_out.c_str();
   fout.close();
+}
+
+void CameraCalibrationOptimizer::world_T_CamerasToYAML()
+{
+  for (Picture picture : this->pictures_)
+  {
+    YAML::Emitter out;
+    out << YAML::BeginMap;  // 0
+    out << YAML::Key << "world_T_camera" << YAML::Value;
+    out << YAML::BeginMap;  // 1
+
+    // inverting the camera_T_world
+    std::array<double, REFERENCE_T_TARGET_SIZE> world_T_camera = reference_T_TargetInverse(picture.camera_T_world);
+    std::vector<double> rotation = { world_T_camera[0], world_T_camera[1], world_T_camera[2] };
+    std::vector<double> translation = { world_T_camera[3], world_T_camera[4], world_T_camera[5] };
+
+    out << YAML::Key << "rotation" << YAML::Value << YAML::Flow << rotation;
+    out << YAML::Key << "translation" << YAML::Value << YAML::Flow << translation;
+
+    out << YAML::EndMap;  // 1
+    out << YAML::EndMap;  // 0
+
+    std::string output_file_path = this->detections_directory_path_ + "/optimized/" + picture.file_name;
+    std::ofstream fout(output_file_path);
+    if (!fout.good())
+    {
+      ROS_ERROR_STREAM("Error outputting world_T_cameras: " << output_file_path);
+    }
+    fout << out.c_str();
+    fout.close();
+    // ROS_INFO_STREAM("world_T_cameras outputted successfully: " << output_file_path);
+  }
 }
 
 void CameraCalibrationOptimizer::writeResultsToYAML()
@@ -484,9 +524,11 @@ void CameraCalibrationOptimizer::writeResultsToYAML()
     // ros::shutdown();
   }
 
-  // writes optimized camera info to YAML file
-  this->cameraToYAML(); 
+  // writes optimized data to YAML file
+  this->cameraToYAML();
   this->targetsToYAML();
+  this->world_T_CamerasToYAML();
+  ROS_INFO_STREAM("Optimized output writted to " << output_directory_path);
 }
 
 ///////////////////////////////////////////////////////////////// debugging functions ////////////////
@@ -515,7 +557,8 @@ void CameraCalibrationOptimizer::printStdArray(std::array<T, N> data)
 void CameraCalibrationOptimizer::printTargets(std::map<int, Target> targets)
 {
   std::map<int, Target>::iterator itr;
-  for(itr = targets.begin(); itr != targets.end(); ++itr){
+  for (itr = targets.begin(); itr != targets.end(); ++itr)
+  {
     const Target target = itr->second;
     ROS_INFO_STREAM("targetID: " << itr->first);
     ROS_INFO_STREAM("world_T_target: ");
@@ -545,6 +588,4 @@ void CameraCalibrationOptimizer::printPictures(std::vector<Picture> pictures)
   ROS_INFO("\n");
 }
 ///////////////////////////////////////////////////////////////// debugging functions ////////////////
-
-
 }
