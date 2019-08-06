@@ -40,28 +40,13 @@
 
 namespace camera_calibration
 {
-ReProjectionResidual::ReProjectionResidual(const double* observed_pixel_coordinates, const double* obj_point_in_target)
-{
-  // projected image pixel coordinates (u,v)
-  this->observed_pixel_coordinates[0] = observed_pixel_coordinates[0];
-  this->observed_pixel_coordinates[1] = observed_pixel_coordinates[1];
-
-  // 3D coordinates in ROSWorld with tag0 as origin (X, Y, Z)
-  this->obj_point_in_target[0] = obj_point_in_target[0];
-  this->obj_point_in_target[1] = obj_point_in_target[1];
-  this->obj_point_in_target[2] = obj_point_in_target[2];
-}
-
 template <typename T>
-bool ReProjectionResidual::operator()(const T* const camera_intrinsics, const T* const camera_T_world,
-                                      const T* const world_T_target, T* residuals) const
+void calculatePixelCoords(const T* const camera_intrinsics, const T* const camera_T_world,
+                          const T* const world_T_target, const T* const obj_point_in_target, T* const pixelCoords)
 {
-  const T point[3] = { T(this->obj_point_in_target[0]), T(this->obj_point_in_target[1]),
-                       T(this->obj_point_in_target[2]) };
-
   T p[3];
 
-  ceres::AngleAxisRotatePoint(world_T_target, point, p);
+  ceres::AngleAxisRotatePoint(world_T_target, obj_point_in_target, p);
   p[0] += world_T_target[3];
   p[1] += world_T_target[4];
   p[2] += world_T_target[5];
@@ -103,11 +88,35 @@ bool ReProjectionResidual::operator()(const T* const camera_intrinsics, const T*
   T x_double_prime = x_prime * coefficient + T(2) * p1 * x_prime * y_prime + p2 * (r_raise_2 + T(2) * x_prime_squared);
   T y_double_prime = y_prime * coefficient + p1 * (r_raise_2 + T(2) * y_prime_squared) + T(2) * p2 * x_prime * y_prime;
 
-  T u = fx * x_double_prime + cx;
-  T v = fy * y_double_prime + cy;
+  pixelCoords[0] = fx * x_double_prime + cx;
+  pixelCoords[1] = fy * y_double_prime + cy;
+}
 
-  residuals[0] = u - T(this->observed_pixel_coordinates[0]);
-  residuals[1] = v - T(this->observed_pixel_coordinates[1]);
+ReProjectionResidual::ReProjectionResidual(const double* observed_pixel_coordinates, const double* obj_point_in_target)
+{
+  // projected image pixel coordinates (u,v)
+  this->observed_pixel_coordinates[0] = observed_pixel_coordinates[0];
+  this->observed_pixel_coordinates[1] = observed_pixel_coordinates[1];
+
+  // 3D coordinates in ROSWorld with tag0 as origin (X, Y, Z)
+  this->obj_point_in_target[0] = obj_point_in_target[0];
+  this->obj_point_in_target[1] = obj_point_in_target[1];
+  this->obj_point_in_target[2] = obj_point_in_target[2];
+}
+
+template <typename T>
+bool ReProjectionResidual::operator()(const T* const camera_intrinsics, const T* const camera_T_world,
+                                      const T* const world_T_target, T* residuals) const
+{
+  const T point[3] = { T(this->obj_point_in_target[0]), T(this->obj_point_in_target[1]),
+                       T(this->obj_point_in_target[2]) };
+
+  T pixelCoords[2];
+
+  calculatePixelCoords(camera_intrinsics, camera_T_world, world_T_target, point, pixelCoords);
+
+  residuals[0] = pixelCoords[0] - T(this->observed_pixel_coordinates[0]);
+  residuals[1] = pixelCoords[1] - T(this->observed_pixel_coordinates[1]);
 
   return true;
 }
@@ -262,6 +271,7 @@ Detection getDetection(const YAML::Node& detection_node)
 {
   Detection detection;
   detection.targetID = detection_node["targetID"].as<int>();
+  detection.size = detection_node["size"].as<std::array<double, 2>>();
   for (YAML::const_iterator corner_iterator = detection_node["corners"].begin();
        corner_iterator != detection_node["corners"].end(); ++corner_iterator)
   {
@@ -482,35 +492,70 @@ void CameraCalibrationOptimizer::targetsToYAML()
   fout.close();
 }
 
-void CameraCalibrationOptimizer::world_T_CamerasToYAML()
+void CameraCalibrationOptimizer::pictureToYAML(Picture picture, std::string output_directory_path)
+{
+  YAML::Emitter out;
+  out << YAML::BeginMap;  // 0
+
+  // emitting the camera pose
+  out << YAML::Key << "world_T_camera" << YAML::Value;
+  out << YAML::BeginMap;  // 1
+
+  // inverting the camera_T_world
+  std::array<double, REFERENCE_T_TARGET_SIZE> world_T_camera = reference_T_TargetInverse(picture.camera_T_world);
+  std::vector<double> rotation = { world_T_camera[0], world_T_camera[1], world_T_camera[2] };
+  std::vector<double> translation = { world_T_camera[3], world_T_camera[4], world_T_camera[5] };
+
+  out << YAML::Key << "rotation" << YAML::Value << YAML::Flow << rotation;
+  out << YAML::Key << "translation" << YAML::Value << YAML::Flow << translation;
+  out << YAML::EndMap;  // 1
+
+  // emitting detections in picture
+  out << YAML::Key << "detections" << YAML::Value << YAML::BeginSeq;
+  for (Detection detection : picture.detections)
+  {
+    out << YAML::BeginMap;  // 1 detection
+    out << YAML::Key << "targetID" << YAML::Value << detection.targetID;
+
+    std::vector<double> size(detection.size.begin(), detection.size.end());
+    out << YAML::Key << "size" << YAML::Value << YAML::Flow << size;
+
+    // emitting corner pixel coordinates
+    Target target = this->targets_.at(detection.targetID);
+    out << YAML::Key << "corners" << YAML::Value;
+    out << YAML::BeginMap;  // 2 corners
+    for (int i = 0; i < target.obj_points_in_target.size(); i++)
+    {
+      std::array<double, 2> pixelCoords;
+      calculatePixelCoords(this->camera_intrinsics_.data(), picture.camera_T_world.data(), target.world_T_target.data(),
+                           target.obj_points_in_target[i].data(), pixelCoords.data());
+
+      std::vector<double> pixelCoordsVec(pixelCoords.begin(), pixelCoords.end());
+      out << YAML::Key << i << YAML::Value << YAML::Flow << pixelCoordsVec;
+    }
+
+    out << YAML::EndMap;  // 2 corners
+    out << YAML::EndMap;  // 1 detection
+  }
+  out << YAML::EndSeq;
+  out << YAML::EndMap;  // 0
+
+  std::string output_file_path = output_directory_path + "/" + picture.file_name;
+  std::ofstream fout(output_file_path);
+  if (!fout.good())
+  {
+    ROS_ERROR_STREAM("Error outputting world_T_cameras: " << output_file_path);
+  }
+  fout << out.c_str();
+  fout.close();
+  // ROS_INFO_STREAM("world_T_cameras outputted successfully: " << output_file_path);
+}
+
+void CameraCalibrationOptimizer::picturesToYAML()
 {
   for (Picture picture : this->pictures_)
   {
-    YAML::Emitter out;
-    out << YAML::BeginMap;  // 0
-    out << YAML::Key << "world_T_camera" << YAML::Value;
-    out << YAML::BeginMap;  // 1
-
-    // inverting the camera_T_world
-    std::array<double, REFERENCE_T_TARGET_SIZE> world_T_camera = reference_T_TargetInverse(picture.camera_T_world);
-    std::vector<double> rotation = { world_T_camera[0], world_T_camera[1], world_T_camera[2] };
-    std::vector<double> translation = { world_T_camera[3], world_T_camera[4], world_T_camera[5] };
-
-    out << YAML::Key << "rotation" << YAML::Value << YAML::Flow << rotation;
-    out << YAML::Key << "translation" << YAML::Value << YAML::Flow << translation;
-
-    out << YAML::EndMap;  // 1
-    out << YAML::EndMap;  // 0
-
-    std::string output_file_path = this->detections_directory_path_ + "/optimized/" + picture.file_name;
-    std::ofstream fout(output_file_path);
-    if (!fout.good())
-    {
-      ROS_ERROR_STREAM("Error outputting world_T_cameras: " << output_file_path);
-    }
-    fout << out.c_str();
-    fout.close();
-    // ROS_INFO_STREAM("world_T_cameras outputted successfully: " << output_file_path);
+    pictureToYAML(picture, this->detections_directory_path_ + "/optimized");
   }
 }
 
@@ -527,7 +572,7 @@ void CameraCalibrationOptimizer::writeResultsToYAML()
   // writes optimized data to YAML file
   this->cameraToYAML();
   this->targetsToYAML();
-  this->world_T_CamerasToYAML();
+  this->picturesToYAML();
   ROS_INFO_STREAM("Optimized output writted to " << output_directory_path);
 }
 

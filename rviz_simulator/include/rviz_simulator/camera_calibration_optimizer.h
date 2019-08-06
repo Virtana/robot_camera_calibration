@@ -90,6 +90,7 @@ struct Target
 struct Detection
 {
   int targetID;
+  std::array<double, 2> size;
   std::array<std::array<double, CORNER_POINTS_SIZE>, NUM_CORNERS> corners;
 };
 
@@ -185,8 +186,9 @@ private:
   /// Helper YAML output function
   void targetsToYAML();
 
-  /// Helper YAML output function
-  void world_T_CamerasToYAML();
+  /// Helper YAML output functions
+  void pictureToYAML(Picture picture, std::string output_directory_path);
+  void picturesToYAML();
 
   ///////////////////////////////////////////////////////////////// debugging functions ////////////////
   template <typename T>
