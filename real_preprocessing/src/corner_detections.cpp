@@ -29,28 +29,25 @@ void yamlDump(double tag_size, int tag_id, std::pair<int, int> pix_coord[], std:
 
 void aprilDetection(const apriltag_ros::AprilTagDetectionArray::ConstPtr& msg)
 {
-	if (capture == "") //specifies key to dump YAML provided there is tag detection
+	if ((capture == "")&&(!msg->detections.empty())) //specifies key to dump YAML provided there is tag detection
 	{
-		if (!msg->detections.empty())
+		std::ofstream fout;
+		for (int i = 0; i != msg->detections.size(); i++)
 		{
-			std::ofstream fout;
-			for (int i = 0; i != msg->detections.size(); i++)
+			double tag_size = msg->detections[i].size[0];
+			int tag_id = msg->detections[i].id[0];
+			std::pair<int, int> pix_coord[4];
+			for (int n = 0; n != 4; n++)
 			{
-				double tag_size = msg->detections[i].size[0];
-				int tag_id = msg->detections[i].id[0];
-				std::pair<int, int> pix_coord[4];
-				for (int n = 0; n != 4; n++)
-				{
-					int pix_x = int(msg->detections[i].pixel_corners_x[n]);
-					int pix_y = int(msg->detections[i].pixel_corners_y[n]);
-					pix_coord[n] = std::make_pair(pix_x, pix_y);
-				}
-				yamlDump(tag_size, tag_id, pix_coord, fout, i);
+				int pix_x = int(msg->detections[i].pixel_corners_x[n]);
+				int pix_y = int(msg->detections[i].pixel_corners_y[n]);
+				pix_coord[n] = std::make_pair(pix_x, pix_y);
 			}
-			fout << "\n";
-			fout.close();
-			filenum++;
+			yamlDump(tag_size, tag_id, pix_coord, fout, i);
 		}
+		fout << "\n";
+		fout.close();
+		filenum++;
 		capture = "1"; //ensures input key does not force infinite loop
 	}
 	std::getline(std::cin, capture); //trigger input 
