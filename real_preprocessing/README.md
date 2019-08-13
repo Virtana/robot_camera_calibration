@@ -11,7 +11,7 @@
 	find_package(find_package(OpenCV REQUIRED PATHS "YOUR-FOLDER-PATH")
 
 ### apriltag_ros library 
-The **apriltag\_ros** library was forked and modified to publish pixel coordinates of detected tags on the /tag_detections rostopic. This was done as an alternative method to the homography concepts which used used camera intrinsics for pixel point determination. This fork can be found [here](https://github.com/DAA2310/apriltag_ros/tree/milestone_1b_pipeline) and is the assumed publisher to **corner\_detections.cpp**.
+The **apriltag\_ros** library was forked and modified to publish pixel coordinates of detected tags on the /tag_detections rostopic. This was done as an alternative method to the homography concepts which used camera intrinsics for pixel point determination. This fork can be found [here](https://github.com/DAA2310/apriltag_ros/tree/milestone_1b_pipeline) and is the assumed publisher to **corner\_detections.cpp**.
 
 ### Camera calibration
 The package requires calibration of the camera for an initial guess of the camera intrinsics, to be used for OpenCV's SolvePNP function. This was done using [camera\_calibration](http://wiki.ros.org/camera_calibration). The calibration package generates a "camera.yaml" file which is used in **camera\_pose.cpp**.
