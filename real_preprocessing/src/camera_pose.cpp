@@ -255,10 +255,7 @@ class PoseSystem
         unknown_file.push_back(file); //stores file with all unknown tags
       }
       file++;
-      if (fileReader(file,known_tag_in_file) == NO_FILE)//generates targets.yaml at the end of file list
-      {
-        targetDump(w_T_tags_id,w_T_tags_size,w_T_tags_trans);
-      }
+      targetDump(w_T_tags_id,w_T_tags_size,w_T_tags_trans);
     }
   }
 
