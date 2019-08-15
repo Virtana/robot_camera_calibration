@@ -46,7 +46,7 @@ public:
   /// @param marker_position_in_ROSWorld      Initial position of tag in ROSWorld
   /// @param marker_orientation_in_ROSWorld   Initial orientation of tag in ROSWorld
   /// @param marker_color_RGBA                Marker colour (red, green blue) and opacity setting
-  /// @param marker_scale                     The length of a side of the interactive marker
+  /// @param target_size                      Vector of size 3 denoting the marker's [length, width, depth] dimensions 
   /// @param g_interactive_marker_server      Shared pointer for interactive marker server
   /// @param interaction_mode                 Specifies how the marker will react to events (3D MOVEMENT or BUTTON
   /// clicks)
