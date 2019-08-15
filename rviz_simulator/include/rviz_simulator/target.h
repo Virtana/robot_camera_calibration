@@ -53,7 +53,7 @@ public:
   Target(const std::string marker_frame_id, const std::string marker_name,
          const geometry_msgs::Point marker_position_in_ROSWorld,
          const geometry_msgs::Quaternion marker_orientation_in_ROSWorld, const std_msgs::ColorRGBA marker_color_RGBA,
-         double marker_scale,
+         std::vector<double> target_size,
          boost::shared_ptr<interactive_markers::InteractiveMarkerServer> g_interactive_marker_server,
          unsigned int interaction_mode);
 
@@ -79,7 +79,7 @@ private:
   geometry_msgs::Point marker_position_in_ROSWorld_;
   geometry_msgs::Quaternion marker_orientation_in_ROSWorld_;
   std_msgs::ColorRGBA marker_color_RGBA_;
-  double marker_scale_;
+  std::vector<double> target_size_;
   unsigned int interaction_mode_;
 
   /// Makes the cube representative of the marker and sets its characteristics.

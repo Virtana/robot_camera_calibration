@@ -64,22 +64,23 @@ geometry_msgs::Point loadPoint(const ros::NodeHandle& n, const std::string& poin
   }
   else  // point param not specified
   {
-    ROS_WARN_STREAM(point_name << " param was not specified. Using default values.");
     if (point_name == "starting_target_position")
     {
       point.x = 0.0;
       point.y = 0.0;
       point.z = 0.0;
+      ROS_WARN_STREAM(point_name << " param was not specified. Using default values.");
     }
     else if (point_name == "starting_camera_position")
     {
       point.x = 0.0;
       point.y = 3.0;
       point.z = 0.0;
+      ROS_WARN_STREAM(point_name << " param was not specified. Using default values.");
     }
     else  // invalid point name
     {
-      ROS_ERROR_STREAM(point_name << " is an invalid param name.");
+      ROS_ERROR_STREAM("The param " << point_name << "was not found or is of an invalid type. Exiting application!");
       ros::shutdown();
     }
   }
@@ -94,18 +95,20 @@ geometry_msgs::Quaternion loadOrientation(const ros::NodeHandle& n, const std::s
   std::vector<double> rotation_matrix_col_major;
   if (!n.getParam(orientation_name, rotation_matrix_col_major))
   {
-    ROS_WARN_STREAM(orientation_name << " param was not specified. Using default values.");
     if (orientation_name == "starting_target_orientation")
     {
       rotation_matrix_col_major = { -1, 0, 0, 0, 0, 1, 0, 1, 0 };
+      ROS_WARN_STREAM(orientation_name << " param was not specified. Using default values.");
     }
     else if (orientation_name == "starting_camera_orientation")
     {
       rotation_matrix_col_major = { -1, 0, 0, 0, 0, -1, 0, -1, 0 };
+      ROS_WARN_STREAM(orientation_name << " param was not specified. Using default values.");
     }
     else
     {
-      ROS_ERROR_STREAM(orientation_name << " is an invalid param name.");
+      ROS_ERROR_STREAM("The param " << orientation_name << "was not found or is of an invalid type. Exiting "
+                                                           "application!");
       ros::shutdown();
     }
   }
@@ -125,39 +128,39 @@ rviz_simulator::CameraProperties loadCameraProperties(const ros::NodeHandle& n)
   rviz_simulator::CameraProperties camera_properties;
   if (!n.getParam("image_width", camera_properties.image_width))
   {
-    ROS_ERROR("image_width camera property not specified.");
+    ROS_ERROR("image_width camera property was not found or is of an invalid type. Exiting application!");
     ros::shutdown();
   }
 
   if (!n.getParam("image_height", camera_properties.image_height))
   {
-    ROS_ERROR("image_height camera property not specified.");
+    ROS_ERROR("image_height camera property was not found or is of an invalid type. Exiting application!");
     ros::shutdown();
   }
 
   if (!n.getParam("camera_name", camera_properties.camera_name))
   {
-    ROS_ERROR("camera_name camera property not specified.");
+    ROS_ERROR("camera_name camera property was not found or is of an invalid type. Exiting application!");
     ros::shutdown();
   }
 
   std::vector<double> camera_matrix;
   if (!n.getParam("camera_matrix/data", camera_matrix))
   {
-    ROS_ERROR("camera_matrix camera property not specified.");
+    ROS_ERROR("camera_matrix camera property was not found or is of an invalid type. Exiting application!");
     ros::shutdown();
   }
 
   if (!n.getParam("distortion_model", camera_properties.distortion_model))
   {
-    ROS_ERROR("distortion_model camera property not specified.");
+    ROS_ERROR("distortion_model camera property was not found or is of an invalid type. Exiting application!");
     ros::shutdown();
   }
 
   std::vector<double> distortion_coefficients;
   if (!n.getParam("distortion_coefficients/data", distortion_coefficients))
   {
-    ROS_ERROR("distortion_coefficients camera property not specified.");
+    ROS_ERROR("distortion_coefficients camera property was not found or is of an invalid type. Exiting application!");
     ros::shutdown();
   }
 
@@ -181,7 +184,8 @@ rviz_simulator::CameraProperties loadCameraProperties(const ros::NodeHandle& n)
   }
   else
   {
-    ROS_ERROR("Unknown camera distortion model specified!\n");
+    ROS_ERROR("Unknown camera distortion model specified! \nOnly the \"plumb_bob\" model is currently supported. "
+              "\nExiting application!");
     ros::shutdown();
   }
 
@@ -190,9 +194,9 @@ rviz_simulator::CameraProperties loadCameraProperties(const ros::NodeHandle& n)
 
 /// Makes a row of targets
 void makeLineOfTargets(std::string world_frame_id, int num_targets, int distance_between_targets,
-                       int first_target_number, geometry_msgs::Point first_target_position,
-                       geometry_msgs::Quaternion target_orientation, std_msgs::ColorRGBA world_origin_color,
-                       std_msgs::ColorRGBA regular_target_color)
+                       std::vector<double> target_size, int first_target_number,
+                       geometry_msgs::Point first_target_position, geometry_msgs::Quaternion target_orientation,
+                       std_msgs::ColorRGBA world_origin_color, std_msgs::ColorRGBA regular_target_color)
 {
   std_msgs::ColorRGBA color = regular_target_color;
   if (first_target_number == 0)
@@ -201,9 +205,9 @@ void makeLineOfTargets(std::string world_frame_id, int num_targets, int distance
   geometry_msgs::Point position = first_target_position;
   for (int i = first_target_number; i < num_targets; i++)
   {
-    rviz_simulator::Target* target =
-        new rviz_simulator::Target(world_frame_id, "tag" + std::to_string(i), position, target_orientation, color, 0.1,
-                                   g_interactive_marker_server, visualization_msgs::InteractiveMarkerControl::MOVE_3D);
+    rviz_simulator::Target* target = new rviz_simulator::Target(
+        world_frame_id, "tag" + std::to_string(i), position, target_orientation, color, target_size,
+        g_interactive_marker_server, visualization_msgs::InteractiveMarkerControl::MOVE_3D);
     target->addTargetToServer();
     position.x += distance_between_targets;
 
@@ -231,7 +235,12 @@ int main(int argc, char** argv)
   }
 
   /// setting target marker color and scale
-  double target_scale = 0.1;
+  std::vector<double> target_size;
+  if (!n.getParam("/target_size", target_size) || target_size.size() != 3)
+  {
+    target_size = { 0.1, 0.1, 0.01 };
+    ROS_WARN_STREAM("\"target_size\" param was not specified. Using defualt values.");
+  }
   std_msgs::ColorRGBA target_color;  // grey
   target_color.r = 0.5;
   target_color.g = 0.5;
@@ -273,10 +282,9 @@ int main(int argc, char** argv)
 
   int first_target_number = 0;
 
-  makeLineOfTargets(world_frame_id, num_targets, distance_between_targets, first_target_number,
+  makeLineOfTargets(world_frame_id, num_targets, distance_between_targets, target_size, first_target_number,
                     starting_target_position, starting_target_orientation, world_origin_color, target_color);
 
-  /// loading camera properties
   rviz_simulator::CameraProperties camera_properties = loadCameraProperties(n);
 
   /// setting camera position and orientaiton in ROSWorld
@@ -284,8 +292,9 @@ int main(int argc, char** argv)
   geometry_msgs::Quaternion starting_camera_orientation = loadOrientation(n, "starting_camera_orientation");
 
   /// adding camera to interactive marker server
+  std::vector<double> camera_size(3, 0.2);
   rviz_simulator::Camera camera(world_frame_id, "camera", starting_camera_postion, starting_camera_orientation,
-                                camera_color, camera_scale, target_scale, g_interactive_marker_server,
+                                camera_color, camera_size, target_size, g_interactive_marker_server,
                                 visualization_msgs::InteractiveMarkerControl::BUTTON, camera_properties);
 
   g_interactive_marker_server->applyChanges();

@@ -48,19 +48,20 @@ Eigen::MatrixXd CameraProperties::getCameraMatrix()
 Camera::Camera(const std::string marker_frame_id, const std::string marker_name,
                const geometry_msgs::Point marker_position_in_ROSWorld,
                const geometry_msgs::Quaternion marker_orientation_in_ROSWorld,
-               const std_msgs::ColorRGBA marker_color_RGBA, double marker_scale, double target_scale,
+               const std_msgs::ColorRGBA marker_color_RGBA, std::vector<double> camera_size,
+               std::vector<double> target_size,
                boost::shared_ptr<interactive_markers::InteractiveMarkerServer> g_interactive_marker_server,
                unsigned int interaction_mode, CameraProperties camera_properties)
   : Target(marker_frame_id, marker_name, marker_position_in_ROSWorld, marker_orientation_in_ROSWorld, marker_color_RGBA,
-           marker_scale, g_interactive_marker_server, interaction_mode)
+           camera_size, g_interactive_marker_server, interaction_mode)
 {
   this->camera_properties_ = camera_properties;
   this->camera_properties_.populateCameraMatrix();
 
   // TODO
   // move target length properties to the target class in order to make this configurable for each target.
-  this->target_x_length_ = target_scale;
-  this->target_y_length_ = target_scale;
+  this->target_x_length_ = target_size[0];
+  this->target_y_length_ = target_size[1];
   this->initObjPointsInTarget();
 
   // adding a shutter release button to the camera
@@ -241,11 +242,11 @@ void Camera::takePicture()
   std::string output_file_path = this->output_folder_path_ + "/" + output_file_name;
   std::ofstream fout(output_file_path);
   if (!fout)
-    ROS_ERROR_STREAM("Output file error.\n" << output_file_path << "\n");
+    ROS_ERROR_STREAM("Output file error.\n" << output_file_path);
   else
   {
     fout << detections_out.c_str();
-    ROS_INFO_STREAM("Corner detections dumped to " << output_file_path << "\n");
+    ROS_INFO_STREAM("Corner detections dumped to " << output_file_path);
     fout.close();
     this->num_pictures_++;
   }
@@ -259,7 +260,7 @@ std::vector<Eigen::Vector2d> Camera::processCorners(Eigen::Affine3d camera_T_tar
   for (int i = 0; i < this->obj_points_in_target_.size(); i++)
   {
     Eigen::Vector2d corner = calculatePixelCoords(camera_T_target, this->obj_points_in_target_[i]);
-    ROS_INFO_STREAM("Corner " << i << " u: " << corner[0] << " v: " << corner[1] << std::endl);
+    ROS_INFO_STREAM("Corner " << i << " u: " << corner[0] << " v: " << corner[1]);
     if (!this->isWithinImage(corner))
       return std::vector<Eigen::Vector2d>();  // return empty vector
     corners2d.push_back(corner);
@@ -269,7 +270,7 @@ std::vector<Eigen::Vector2d> Camera::processCorners(Eigen::Affine3d camera_T_tar
   if (!this->isInRange(corners2d))
     return std::vector<Eigen::Vector2d>();  // return empty vector
 
-  ROS_INFO_STREAM("All corners valid.\n");
+  ROS_INFO_STREAM("All corners valid.");
   return corners2d;
 }
 
@@ -314,10 +315,10 @@ bool Camera::isWithinImage(Eigen::Vector2d pixelCoords)
   if (pixelCoords.x() >= 0 && pixelCoords.x() < this->camera_properties_.image_width && pixelCoords.y() >= 0 &&
       pixelCoords.y() < this->camera_properties_.image_height)
   {
-    ROS_INFO_STREAM("Corner is within image\n");
+    ROS_INFO_STREAM("Corner is within image.");
     return true;
   }
-  ROS_INFO_STREAM("Corner is outside image\n");
+  ROS_INFO_STREAM("Corner is outside image.");
   return false;
 }
 
@@ -325,10 +326,10 @@ bool Camera::isInFrontOfCamera(Eigen::Affine3d camera_T_target)
 {
   if (camera_T_target.translation().z() > 0)
   {
-    ROS_INFO_STREAM("Target in front of camera\n");
+    ROS_INFO_STREAM("Target in front of camera.");
     return true;
   }
-  ROS_INFO_STREAM("Target behind camera\n");
+  ROS_INFO_STREAM("Target behind camera.");
   return false;
 }
 
@@ -336,10 +337,10 @@ bool Camera::isInFrontOfTarget(Eigen::Affine3d target_T_camera)
 {
   if (target_T_camera.translation().z() > 0)
   {
-    ROS_INFO_STREAM("Camera in front of target\n");
+    ROS_INFO_STREAM("Camera in front of target.");
     return true;
   }
-  ROS_INFO_STREAM("Camera behind target\n");
+  ROS_INFO_STREAM("Camera behind target.");
   return false;
 }
 
@@ -357,11 +358,11 @@ bool Camera::isInRange(std::vector<Eigen::Vector2d> corners)
   {
     if (differences[i].norm() < this->camera_properties_.min_corner_dist)
     {
-      ROS_INFO_STREAM("Target not in range\n.");
+      ROS_INFO_STREAM("Target not in range.");
       return false;
     }
   }
-  ROS_INFO_STREAM("Target in range\n.");
+  ROS_INFO_STREAM("Target in range.");
   return true;
 }
 
@@ -412,7 +413,7 @@ void Camera::dumpCameraPropertiesToYAMLFile(std::string output_file_name)
   std::ofstream fout(camera_file_path);
   if (!fout)
   {
-    ROS_ERROR_STREAM("Output file error.\n" << camera_file_path << "\n");
+    ROS_ERROR_STREAM("Output file error.\n" << camera_file_path);
   }
   else
   {
@@ -440,7 +441,7 @@ void Camera::calculateWorld_T_Targets(std::string output_file_name)
   {
     // getting world_T_target
     std::string target_name = "tag" + std::to_string(i);
-    ROS_INFO_STREAM("Calculated and stored targetID: " << target_name << std::endl);
+    ROS_INFO_STREAM("Calculated and stored targetID: " << target_name);
     visualization_msgs::InteractiveMarker target_marker;
     this->g_interactive_marker_server_->get(target_name, target_marker);
     Eigen::Affine3d world_T_target = this->calculateReference_T_Target(world_marker, target_marker);
@@ -459,12 +460,12 @@ void Camera::calculateWorld_T_Targets(std::string output_file_name)
   std::string output_file_path = this->output_folder_path_ + "/" + output_file_name;
   std::ofstream fout(output_file_path);
   if (!fout)
-    ROS_ERROR_STREAM("Output file error.\n" << output_file_path << "\n");
+    ROS_ERROR_STREAM("Output file error.\n" << output_file_path);
   else
   {
     fout << targets_out.c_str();
-    ROS_INFO_STREAM("Target data dumped to " << output_file_path << "\n");
-    ROS_WARN("Do not move the targets in rviz from this point!\n");
+    ROS_INFO_STREAM("Target data dumped to " << output_file_path);
+    ROS_WARN("Do not move the targets in rviz from this point!");
     fout.close();
   }
 }
