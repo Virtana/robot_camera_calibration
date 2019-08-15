@@ -5,6 +5,7 @@
 #include "yaml-cpp/yaml.h"
 #include "string"
 #include "Eigen/Dense"
+#include "ros/package.h"
 #define WORLD_PRES 0
 #define KNOWN_TAG 1
 #define UNKNOWN 2
@@ -15,8 +16,7 @@ using namespace cv;
 class PoseSystem
 {
   public:
-  bool print_world;
-  int file, world, world_loc, known_loc;
+  int file, world_tag;
   std::vector<int> w_T_tags_id;
   std::vector<int> unknown_file;
   std::vector<double> w_T_tags_size;
@@ -27,10 +27,9 @@ class PoseSystem
   PoseSystem()
   {
     file=0;
-    world_loc=0;
-    print_world=false;
     kcam_matrix=cv::Mat(3,3,CV_64F,Scalar(0));
     intrinsicLoad(kcam_matrix, kdistCoeffs);
+    worldLoad();
   }
 
   ~PoseSystem(){}
@@ -46,7 +45,18 @@ class PoseSystem
     distCoeffs={intrinsic[0],intrinsic[1],intrinsic[2],intrinsic[3],intrinsic[4]};
   }
 
-  //populates existing detection YAML fules with world T cam transforms
+  void worldLoad()
+  {
+    YAML::Node tags_pix = YAML::LoadFile("detections_0.yaml");
+    world_tag = tags_pix["detections"][0]["targetID"].as<int>(); //world tag chosen in first file/first tag listing
+    Eigen::MatrixXd identity(4,4);
+    identity<<1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1;
+    w_T_tags_trans.push_back(identity);
+    w_T_tags_id.push_back(world_tag);
+    w_T_tags_size.push_back(tags_pix["detections"][0]["size"][0].as<double>());
+  }
+
+  //populates existing detection YAML fules with world_T_cam transforms
   void worldAppend(int filenum, Eigen::MatrixXd wTcam)
   {
     std::string filename("detections_"+std::to_string(filenum)+".yaml");  
@@ -67,7 +77,7 @@ class PoseSystem
   }
 
   //generates YAML file with all mappable tags and their poses relative to the world tag
-  void targetDump(std::vector<int> id, std::vector<double> size, std::vector<Eigen::MatrixXd> trans)
+  void targetDump(std::vector<int>& id, std::vector<double>& size, std::vector<Eigen::MatrixXd>& trans)
   {
     std::ofstream fout;
     fout.open("targets.yaml");
@@ -140,17 +150,17 @@ class PoseSystem
   }
 
   //Calculates w_T_tag for all unknown tags in a file
-  void tagCalc(int filenum, int loc, bool world_pres)
+  void tagCalc(int filenum, int loc, int file_type)
   {
     YAML::Node tags_pix = YAML::LoadFile("detections_" + std::to_string(filenum) + ".yaml");
     Eigen::MatrixXd w_T_cam(4, 4);
-    if(world_pres==false)
+    if(file_type==KNOWN_TAG)
     {
       std::vector<int>::iterator it = std::find(w_T_tags_id.begin(), w_T_tags_id.end(), tags_pix["detections"][loc]["targetID"].as<int>());
       int index = std::distance(w_T_tags_id.begin(), it);
       w_T_cam = w_T_tags_trans[index] * objTcam(loc, filenum);
     }
-    if(world_pres==true)
+    if(file_type==WORLD_PRES)
     {
       w_T_cam=objTcam(loc,filenum);
     }
@@ -171,7 +181,7 @@ class PoseSystem
   }
 
   //Returns status of file : world tag present, known tag present, all unknown tags, no file
-  int fileReader(int filenum)
+  int fileReader(int filenum, int& known_tag_in_file)
   {
     bool known_tag(false);
     std::ifstream fin;
@@ -182,16 +192,7 @@ class PoseSystem
       YAML::Node tags_pix = YAML::LoadFile("detections_" + std::to_string(filenum) + ".yaml");
       if (filenum == 0)//polling first file?
       {
-        world = tags_pix["detections"][0]["targetID"].as<int>(); //world tag chosen in first file/first tag listing
-        if(print_world==false)
-        {
-          Eigen::MatrixXd identity(4,4);
-          identity<<1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1;
-          w_T_tags_trans.push_back(identity);
-          w_T_tags_id.push_back(world);
-          w_T_tags_size.push_back(tags_pix["detections"][0]["size"][0].as<double>());
-          print_world=true;
-        }
+        known_tag_in_file = 0;
         return WORLD_PRES; //world tag present
       }
       for (int i = 0; i < tags_pix["detections"].size(); ++i)
@@ -199,11 +200,11 @@ class PoseSystem
         if (std::find(w_T_tags_id.begin(), w_T_tags_id.end(), tags_pix["detections"][i]["targetID"].as<int>()) !=w_T_tags_id.end())
         {
           known_tag = true;
-          known_loc = i;
+          known_tag_in_file = i;
         }
-        if (tags_pix["detections"][i]["targetID"].as<int>() == world) 
+        if (tags_pix["detections"][i]["targetID"].as<int>() == world_tag) 
         {
-          world_loc = i;
+          known_tag_in_file = i;
           return WORLD_PRES; //world tag present
         }
       }
@@ -214,7 +215,8 @@ class PoseSystem
       else
         return UNKNOWN; //all unknown tags
     }
-    else return NO_FILE; //file does not exist - end of YAML list
+    else 
+      return NO_FILE; //file does not exist - end of YAML list
   }
 
   //Polls for unknown files to be reprocessed 
@@ -224,9 +226,10 @@ class PoseSystem
     {
       for (int i = (unknown_file.size() - 1); i >= 0; i--)
       {
-        if (fileReader(unknown_file[i]) == KNOWN_TAG)
+        int known_tag_in_file;
+        if (fileReader(unknown_file[i],known_tag_in_file) == KNOWN_TAG)
         {
-          tagCalc(unknown_file[i],known_loc,false);
+          tagCalc(unknown_file[i],known_tag_in_file, KNOWN_TAG);
           unknown_file.erase(unknown_file.begin() + i);
         }
       }
@@ -235,26 +238,23 @@ class PoseSystem
 
   //streams all snapshot detection files for tag/pose processing 
   void fileStream()
-  { 
-    while (fileReader(file) != NO_FILE)
+  {
+    int known_tag_in_file;
+    // int status = fileReader(file);
+    while (fileReader(file,known_tag_in_file) != NO_FILE)
     {
-      int status = fileReader(file);
-      if (status == WORLD_PRES) //world tag present
+      if ((fileReader(file,known_tag_in_file) == WORLD_PRES)||(fileReader(file,known_tag_in_file) == KNOWN_TAG)) //world tag or known tags present
       {
-        unknownFilepoll();
-        tagCalc(file,world_loc,true);
-      }
-      if (status == KNOWN_TAG) // known tag present
-      {
-        tagCalc(file,known_loc,false);
+        tagCalc(file,known_tag_in_file,fileReader(file,known_tag_in_file));
         unknownFilepoll();
       }
-      if (status == UNKNOWN) //all unknown tags
+      if (fileReader(file,known_tag_in_file) == UNKNOWN) //all unknown tags
       {
         unknown_file.push_back(file); //stores file with all unknown tags
       }
+      // Check the next file to see if it exists
       file++;
-      if (fileReader(file) == NO_FILE) //end of YAML list 
+      if (fileReader(file,known_tag_in_file) == NO_FILE) //end of YAML list 
       {
         targetDump(w_T_tags_id,w_T_tags_size,w_T_tags_trans);
       }
