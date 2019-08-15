@@ -240,21 +240,22 @@ class PoseSystem
   void fileStream()
   {
     int known_tag_in_file;
-    // int status = fileReader(file);
-    while (fileReader(file,known_tag_in_file) != NO_FILE)
+    int status = fileReader(file,known_tag_in_file);
+    while (status != NO_FILE)
     {
-      if ((fileReader(file,known_tag_in_file) == WORLD_PRES)||(fileReader(file,known_tag_in_file) == KNOWN_TAG)) //world tag or known tags present
+      if ((status == WORLD_PRES)||(status == KNOWN_TAG)) //world tag or known tags present
       {
-        tagCalc(file,known_tag_in_file,fileReader(file,known_tag_in_file));
+        tagCalc(file,known_tag_in_file,status);
         unknownFilepoll();
       }
-      if (fileReader(file,known_tag_in_file) == UNKNOWN) //all unknown tags
+      if (status == UNKNOWN) //all unknown tags
       {
         unknown_file.push_back(file); //stores file with all unknown tags
       }
       // Check the next file to see if it exists
       file++;
-      if (fileReader(file,known_tag_in_file) == NO_FILE) //end of YAML list 
+      status = fileReader(file,known_tag_in_file);
+      if (status == NO_FILE) //end of YAML list 
       {
         targetDump(w_T_tags_id,w_T_tags_size,w_T_tags_trans);
       }
