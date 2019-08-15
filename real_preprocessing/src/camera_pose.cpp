@@ -29,7 +29,17 @@ class PoseSystem
     file=0;
     kcam_matrix=cv::Mat(3,3,CV_64F,Scalar(0));
     intrinsicLoad(kcam_matrix, kdistCoeffs);
-    worldLoad();
+  }
+
+  std::string pathLoad(int filenum=-1)
+  {
+    std::string path = ros::package::getPath("real_preprocessing");
+    path=path+"/detections";
+    if(filenum!=-1)
+    {
+      path=path+"/detections_"+std::to_string(filenum)+".yaml";
+    }
+    return path;
   }
 
   ~PoseSystem(){}
@@ -48,7 +58,7 @@ class PoseSystem
   //populates world tag data based on first image taken
   void worldLoad()
   {
-    YAML::Node tags_pix = YAML::LoadFile("detections_0.yaml");
+    YAML::Node tags_pix = YAML::LoadFile(pathLoad(0));
     kworld_tag = tags_pix["detections"][0]["targetID"].as<int>(); //world tag chosen in first file/first tag listing
     Eigen::MatrixXd identity(4,4);
     identity<<1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1;
@@ -60,7 +70,7 @@ class PoseSystem
   //populates existing detection YAML fules with world_T_cam transforms
   void worldAppend(int filenum, Eigen::MatrixXd wTcam)
   {
-    std::string filename("detections_"+std::to_string(filenum)+".yaml");  
+    std::string filename(pathLoad(filenum));  
     std::ofstream fout;
 
     double rotation_vec[9]= {wTcam(0, 0),wTcam(0, 1),wTcam(0, 2),
@@ -81,7 +91,7 @@ class PoseSystem
   void targetDump(std::vector<int>& id, std::vector<double>& size, std::vector<Eigen::MatrixXd>& trans)
   {
     std::ofstream fout;
-    fout.open("targets.yaml");
+    fout.open(pathLoad()+"/targets.yaml");
     fout << "targets:"; 
     for(int i=0;i!=id.size();i++)
     {
@@ -153,7 +163,7 @@ class PoseSystem
   //Calculates w_T_tag for all unknown tags in a file
   void tagCalc(int filenum, int loc, int file_type)
   {
-    YAML::Node tags_pix = YAML::LoadFile("detections_" + std::to_string(filenum) + ".yaml");
+    YAML::Node tags_pix = YAML::LoadFile(pathLoad(filenum));
     Eigen::MatrixXd w_T_cam(4, 4);
     if(file_type==KNOWN_TAG)
     {
@@ -187,13 +197,14 @@ class PoseSystem
   {
     bool known_tag(false);
     std::ifstream fin;
-    fin.open("detections_" + std::to_string(filenum) + ".yaml");
+    fin.open(pathLoad(filenum));
     if (fin.is_open())
     {
       fin.close();
-      YAML::Node tags_pix = YAML::LoadFile("detections_" + std::to_string(filenum) + ".yaml");
+      YAML::Node tags_pix = YAML::LoadFile(pathLoad(filenum));
       if (filenum == 0)//polling first file?
       {
+        worldLoad();
         known_tag_in_file = 0;
         return WORLD_PRES; //world tag present
       }
