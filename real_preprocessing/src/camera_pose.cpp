@@ -31,6 +31,8 @@ class PoseSystem
     intrinsicLoad(kcam_matrix, kdistCoeffs);
   }
 
+  ~PoseSystem(){}
+
   std::string pathLoad(int filenum=-1)
   {
     std::string path; 
@@ -39,11 +41,8 @@ class PoseSystem
     {
       path=path+"/detections_"+std::to_string(filenum)+".yaml";
     }
-    ROS_INFO_STREAM(path);
     return path;
   }
-
-  ~PoseSystem(){}
 
   //loads camera intrinsics from rosparam server
   void intrinsicLoad(cv::Mat& cam_matrix, cv::Vec<float, 5>& distCoeffs)
