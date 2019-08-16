@@ -33,12 +33,13 @@ class PoseSystem
 
   std::string pathLoad(int filenum=-1)
   {
-    std::string path = ros::package::getPath("real_preprocessing");
-    path=path+"/detections";
+    std::string path; 
+    path = ros::package::getPath("real_preprocessing") +"/detections";
     if(filenum!=-1)
     {
       path=path+"/detections_"+std::to_string(filenum)+".yaml";
     }
+    ROS_INFO_STREAM(path);
     return path;
   }
 
@@ -119,7 +120,7 @@ class PoseSystem
   //solvePnP calculator given file number and tag position in file
   Eigen::MatrixXd tagTcam(int loc, int filenum)
   {
-    YAML::Node tags_pix = YAML::LoadFile("detections_" + std::to_string(filenum) + ".yaml");
+    YAML::Node tags_pix = YAML::LoadFile(pathLoad(filenum));
     int bl_pix_x = tags_pix["detections"][loc]["corners"]["0"][0].as<int>();
     int bl_pix_y = tags_pix["detections"][loc]["corners"]["0"][1].as<int>();
     int br_pix_x = tags_pix["detections"][loc]["corners"]["1"][0].as<int>();
