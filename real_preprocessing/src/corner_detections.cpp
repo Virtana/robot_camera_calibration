@@ -11,7 +11,7 @@ std::string capture("1");
 void yamlDump(double tag_size, int tag_id, std::pair<int, int> pix_coord[], std::ofstream& fout, int index)
 {
   // file name generation
-  std::string path = ros::package::getPath("real_preprocessing") + "/detections/detections_"+std::to_string(filenum)+".yaml";  
+  std::string path = ros::package::getPath("real_preprocessing") + "/detections/detections_" + std::to_string(filenum) + ".yaml";  
   std::string filename(path);
   if (index == 0)
   {
