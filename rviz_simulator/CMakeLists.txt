@@ -5,12 +5,14 @@
 
 cmake_minimum_required(VERSION 2.8.3)
 project(rviz_simulator)
-set (CMAKE_CXX_STANDARD 11)
+# set (CMAKE_CXX_STANDARD 11)
+add_compile_options(-std=c++11)
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
+  camera_calibration_parsers
   roscpp
   rosconsole
   std_msgs
@@ -87,6 +89,7 @@ find_package(Ceres REQUIRED)
 #   DEPENDENCIES
 #   std_msgs#   visualization_msgs
 # )
+
 
 ################################################
 ## Declare ROS dynamic reconfigure parameters ##
@@ -195,6 +198,10 @@ add_library(simulate_lib
   src/target.cpp
 )
 
+add_library(camera_calibration_optimizer_lib
+  src/camera_calibration_optimizer.cpp
+)
+
 ## Declare a C++ library
 #add_library(${PROJECT_NAME}
 #  src/simulate.cpp
@@ -206,7 +213,6 @@ target_link_libraries(simulate
   simulate_lib
   ${catkin_LIBRARIES} 
   ${boost_LIBRARIES}
-  ${CERES_LIBRARIES}
   yaml-cpp
 )
 
@@ -215,16 +221,16 @@ target_link_libraries(simulate
 #)
 
 # synthetic_optimization
-# add_executable(synthetic_optimization src/synthetic_optimization.cpp)
-#target_link_libraries(synthetic_optimization
- # ${catkin_LIBRARIES} 
- # ${boost_LIBRARIES}
- # ${CERES_LIBRARIES}
- # yaml-cpp
-#)
+add_executable(synthetic_optimization src/synthetic_optimization.cpp)
+target_link_libraries(synthetic_optimization
+  camera_calibration_optimizer_lib
+  ${catkin_LIBRARIES} 
+  ${boost_LIBRARIES}
+  ${CERES_LIBRARIES}
+  yaml-cpp
+)
 
 # target_link_libraries(${PROJECT_NAME} yaml-cpp)
-
 
 
 # add_dependencies()
