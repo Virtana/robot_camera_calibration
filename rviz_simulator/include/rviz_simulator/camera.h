@@ -39,8 +39,9 @@
 #include <fstream>
 
 // for making directories
-#include <sys/stat.h>
-#include <sys/types.h>
+// #include <sys/stat.h>
+// #include <sys/types.h>
+#include <boost/filesystem.hpp>
 
 // for getting package path
 #include <ros/package.h>
@@ -116,16 +117,16 @@ public:
   /// @param marker_position_in_ROSWorld      Initial position of tag in ROSWorld
   /// @param marker_orientation_in_ROSWorld   Initial orientation of tag in ROSWorld
   /// @param marker_color_RGBA                Marker colour (red, green blue) and opacity setting
-  /// @param marker_scale                     The length of a side of the interactive marker
+  /// @param camera_size                      x, y, z dimensions of the camera visualization marker in RViz
+  /// @param target_size                      x, y, z dimensions a given target
   /// @param g_interactive_marker_server      Shared pointer for interactive marker server
   /// @param interaction_mode                 Specifies how the marker will react to events (3D MOVEMENT or BUTTON
   /// clicks)
-  /// @param camera_intrinsics              Intrinsic properties for the simulated camera
-  /// @param camera_distortions             Camera distortions
+  /// @param camera_properties                
   Camera(const std::string marker_frame_id, const std::string marker_name,
          const geometry_msgs::Point marker_position_in_ROSWorld,
          const geometry_msgs::Quaternion marker_orientation_in_ROSWorld, const std_msgs::ColorRGBA marker_color_RGBA,
-         double marker_scale, double target_scale,
+         std::vector<double> camera_size, std::vector<double> target_size,
          boost::shared_ptr<interactive_markers::InteractiveMarkerServer> g_interactive_marker_server,
          unsigned int interaction_mode, CameraProperties camera_properties);
 

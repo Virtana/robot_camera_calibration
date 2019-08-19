@@ -36,7 +36,7 @@ namespace rviz_simulator
 Target::Target(const std::string marker_frame_id, const std::string marker_name,
                const geometry_msgs::Point marker_position_in_ROSWorld,
                const geometry_msgs::Quaternion marker_orientation_in_ROSWorld,
-               const std_msgs::ColorRGBA marker_color_RGBA, double marker_scale,
+               const std_msgs::ColorRGBA marker_color_RGBA, std::vector<double> target_size,
                boost::shared_ptr<interactive_markers::InteractiveMarkerServer> g_interactive_marker_server,
                unsigned int interaction_mode)
 {
@@ -45,7 +45,7 @@ Target::Target(const std::string marker_frame_id, const std::string marker_name,
   this->marker_position_in_ROSWorld_ = marker_position_in_ROSWorld;
   this->marker_orientation_in_ROSWorld_ = marker_orientation_in_ROSWorld;
   this->marker_color_RGBA_ = marker_color_RGBA;
-  this->marker_scale_ = marker_scale;
+  this->target_size_ = target_size;
   this->g_interactive_marker_server_ = g_interactive_marker_server;
   this->interaction_mode_ = interaction_mode;
 
@@ -62,9 +62,9 @@ visualization_msgs::Marker Target::makeMarkerBox(visualization_msgs::Interactive
 
   marker.type = visualization_msgs::Marker::CUBE;
 
-  marker.scale.x = msg.scale * this->marker_scale_;
-  marker.scale.y = msg.scale * this->marker_scale_;
-  marker.scale.z = msg.scale * this->marker_scale_;
+  marker.scale.x = msg.scale * this->target_size_[0];
+  marker.scale.y = msg.scale * this->target_size_[1];
+  marker.scale.z = msg.scale * this->target_size_[2];
 
   marker.color = this->marker_color_RGBA_;
 
