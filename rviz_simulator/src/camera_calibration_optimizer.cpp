@@ -92,16 +92,13 @@ void calculatePixelCoords(const T* const camera_intrinsics, const T* const camer
   pixelCoords[1] = fy * y_double_prime + cy;
 }
 
-ReProjectionResidual::ReProjectionResidual(const double* observed_pixel_coordinates, const double* obj_point_in_target)
+ReProjectionResidual::ReProjectionResidual(const std::array<double, CORNER_POINTS_SIZE> &observed_pixel_coordinates, const std::array<double, OBJ_POINTS_SIZE> &obj_point_in_target)
 {
   // projected image pixel coordinates (u,v)
-  this->observed_pixel_coordinates[0] = observed_pixel_coordinates[0];
-  this->observed_pixel_coordinates[1] = observed_pixel_coordinates[1];
+  this->observed_pixel_coordinates = observed_pixel_coordinates;
 
   // 3D coordinates in ROSWorld with tag0 as origin (X, Y, Z)
-  this->obj_point_in_target[0] = obj_point_in_target[0];
-  this->obj_point_in_target[1] = obj_point_in_target[1];
-  this->obj_point_in_target[2] = obj_point_in_target[2];
+  this->obj_point_in_target = obj_point_in_target;
 }
 
 template <typename T>
@@ -121,7 +118,7 @@ bool ReProjectionResidual::operator()(const T* const camera_intrinsics, const T*
   return true;
 }
 
-static ceres::CostFunction* Create(const double* observed_pixel_coordinates, const double* obj_point_in_target)
+static ceres::CostFunction* Create(const std::array<double, CORNER_POINTS_SIZE> &observed_pixel_coordinates, const std::array<double, OBJ_POINTS_SIZE> &obj_point_in_target)
 {
   return (new ceres::AutoDiffCostFunction<ReProjectionResidual, 2, CAMERA_INTRINSICS_SIZE, REFERENCE_T_TARGET_SIZE,
                                           REFERENCE_T_TARGET_SIZE>(
@@ -344,7 +341,7 @@ std::vector<Picture> CameraCalibrationOptimizer::getPictures(std::string detecti
   std::vector<std::string> detection_file_names = getDetectionEntityNames(detections_directory_path, DT_REG);
 
   std::vector<Picture> pictures;
-  for (auto detection_file_name : detection_file_names)
+  for (const std::string &detection_file_name : detection_file_names)
   {
     Picture picture = getPicture(detections_directory_path + "/" + detection_file_name, detection_file_name);
     if (!picture.detections.empty())
@@ -362,19 +359,18 @@ std::vector<Picture> CameraCalibrationOptimizer::getPictures(std::string detecti
 
 void CameraCalibrationOptimizer::buildBundleAdjustmentProblem()
 {
-  for (int p = 0; p < this->pictures_.size(); p++)
+  for (Picture &picture : this->pictures_)
   {
-    for (int d = 0; d < this->pictures_[p].detections.size(); d++)
+    for (Detection &detection : picture.detections)
     {
-      for (int c = 0; c < this->pictures_[p].detections[d].corners.size(); c++)
+      for (int c = 0; c < detection.corners.size(); c++)
       {
         ceres::CostFunction* cost_function =
-            Create(this->pictures_[p].detections[d].corners[c].data(),
-                   this->targets_.at(pictures_[p].detections[d].targetID).obj_points_in_target[c].data());
+            Create(detection.corners[c], this->targets_.at(detection.targetID).obj_points_in_target[c]);
 
         this->bundle_adjustment_problem_.AddResidualBlock(
-            cost_function, NULL, this->camera_intrinsics_.data(), this->pictures_[p].camera_T_world.data(),
-            this->targets_.at(this->pictures_[p].detections[d].targetID).world_T_target.data());
+            cost_function, NULL, this->camera_intrinsics_.data(), picture.camera_T_world.data(),
+            this->targets_.at(detection.targetID).world_T_target.data());
       }
     }
   }
@@ -512,7 +508,7 @@ void CameraCalibrationOptimizer::pictureToYAML(Picture picture, std::string outp
 
   // emitting detections in picture
   out << YAML::Key << "detections" << YAML::Value << YAML::BeginSeq;
-  for (Detection detection : picture.detections)
+  for (const Detection &detection : picture.detections)
   {
     out << YAML::BeginMap;  // 1 detection
     out << YAML::Key << "targetID" << YAML::Value << detection.targetID;
@@ -560,10 +556,10 @@ void CameraCalibrationOptimizer::picturesToYAML()
 }
 
 void CameraCalibrationOptimizer::writeResultsToYAML()
-{
+{  
   // making optimized data directory
   std::string output_directory_path = this->detections_directory_path_ + "/optimized";
-  if (mkdir(output_directory_path.c_str(), 0777) == -1)
+  if (!boost::filesystem::create_directories(output_directory_path))
   {
     ROS_WARN_STREAM("Making output directory :  " << strerror(errno) << std::endl);
     // ros::shutdown();

@@ -61,8 +61,7 @@ std::string getDetectionsDirectoryPath(ros::NodeHandle& n)
   // checking existance of detections directory
   std::string package_path = ros::package::getPath("rviz_simulator");
   std::string detections_directory_path = package_path + "/detections/" + detections_directory_name;
-  struct stat info;
-  if (stat(detections_directory_path.c_str(), &info) != 0)
+  if (!boost::filesystem::is_directory(detections_directory_path))
   {
     ROS_ERROR("Detections directory read error.\n");
     ros::shutdown();

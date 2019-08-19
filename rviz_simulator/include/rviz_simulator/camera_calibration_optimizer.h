@@ -55,8 +55,7 @@
 #include <dirent.h>
 
 // for making directories
-#include <sys/stat.h>
-#include <sys/types.h>
+#include <boost/filesystem.hpp>
 
 // for outputting camera calibration properties to YAML
 #include <camera_calibration_parsers/parse_yml.h>
@@ -109,7 +108,7 @@ struct ReProjectionResidual
 {
 public:
   // Constructor
-  ReProjectionResidual(const double* observed_pixel_coordinates, const double* obj_point_in_target);
+  ReProjectionResidual(const std::array<double, CORNER_POINTS_SIZE> &observed_pixel_coordinates, const std::array<double, OBJ_POINTS_SIZE> &obj_point_in_target);
 
   // Using the openCV camera calibration model:
   // https://docs.opencv.org/2.4/modules/calib3d/doc/camera_calibration_and_3d_reconstruction.html
@@ -121,8 +120,8 @@ public:
   static ceres::CostFunction* Create(const double* observed_pixel_coordinates, const double* obj_point_in_target);
 
 private:
-  double observed_pixel_coordinates[2];
-  double obj_point_in_target[3];
+  std::array<double, CORNER_POINTS_SIZE> observed_pixel_coordinates;
+  std::array<double, OBJ_POINTS_SIZE> obj_point_in_target;
 };
 
 /// The camera calibration class
