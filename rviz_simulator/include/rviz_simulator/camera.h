@@ -39,8 +39,9 @@
 #include <fstream>
 
 // for making directories
-#include <sys/stat.h>
-#include <sys/types.h>
+// #include <sys/stat.h>
+// #include <sys/types.h>
+#include <boost/filesystem.hpp>
 
 // for getting package path
 #include <ros/package.h>

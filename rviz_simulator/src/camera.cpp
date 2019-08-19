@@ -108,17 +108,17 @@ void Camera::makeOutputDirectories()
   std::string detections_root_folder = package_path + "/detections";
 
   // if detections root directory does not exist then create it
-  struct stat info;
-  if (stat(detections_root_folder.c_str(), &info) != 0)
+  // struct stat info;
+  if (!boost::filesystem::is_directory(detections_root_folder))
   {
     ROS_INFO_STREAM("Making directory: " << detections_root_folder);
-    if (mkdir(detections_root_folder.c_str(), 0777) == -1)
+    if (!boost::filesystem::create_directories(detections_root_folder))
       ROS_ERROR_STREAM("Error making directory :  " << strerror(errno) << std::endl);
   }
 
   this->output_folder_path_ = detections_root_folder + "/" + output_folder_name;
 
-  if (mkdir(this->output_folder_path_.c_str(), 0777) == -1)
+  if (!boost::filesystem::create_directories(this->output_folder_path_))
     ROS_ERROR_STREAM("Error :  " << strerror(errno) << std::endl);
 
   else
