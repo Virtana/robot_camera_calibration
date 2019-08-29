@@ -19,6 +19,16 @@ using namespace cv;
 
 class PoseSystem
 {
+  public:
+  PoseSystem()
+  {
+    det_file_num=0;
+    kcam_matrix=cv::Mat(3,3,CV_64F,Scalar(0));
+    intrinsicLoad(kcam_matrix, kdistCoeffs);
+  }
+
+  ~PoseSystem(){}
+
   private:
   int det_file_num, kworld_tag;
   std::vector<int> w_T_tags_id;
@@ -28,19 +38,18 @@ class PoseSystem
   cv::Mat kcam_matrix;
   cv::Vec<double, 5> kdistCoeffs;
 
-  //Returns the absolute directory path for detections/target yaml files
-  std::string getFilepath(int filenum = TARGET)
+  //Returns the absolute directory path for package detections folder
+  std::string getBasepath()
   {
-    std::string basepath = ros::package::getPath("real_preprocessing") +"/detections";
-    if (filenum == TARGET)
-    {
-      return basepath + "/targets.yaml";
-    }
-    else
-    {
-      return basepath + "/detections_" + std::to_string(filenum) + ".yaml";
-    }
+    return (ros::package::getPath("real_preprocessing") +"/detections");
   }
+
+  //Returns the absolute directory path for detections files
+  std::string getDetfilePath(int filenum)
+  {
+    return (getBasepath() + "/detections_" + std::to_string(filenum) + ".yaml");
+  }
+
 
   //loads camera intrinsics from rosparam server
   void intrinsicLoad(cv::Mat& cam_matrix, cv::Vec<double, 5>& distCoeffs)
@@ -61,7 +70,7 @@ class PoseSystem
   //populates world tag data based on first image taken
   void worldLoad()
   {
-    YAML::Node YAML_handle = YAML::LoadFile(getFilepath(0));
+    YAML::Node YAML_handle = YAML::LoadFile(getDetfilePath(0));
     kworld_tag = YAML_handle["detections"][0]["targetID"].as<int>(); //world tag chosen as first tag in list
     Eigen::MatrixXd identity(4,4);
     identity<<1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1;
@@ -73,7 +82,7 @@ class PoseSystem
   //Appends world_T_cam transform to respective detection YAML file
   void worldAppend(int filenum, Eigen::MatrixXd w_T_cam)
   {
-    std::string filename(getFilepath(filenum));  
+    std::string filename(getDetfilePath(filenum));  
     std::ofstream fout;
 
     double rotation_vec[9]= {w_T_cam(0, 0),w_T_cam(0, 1),w_T_cam(0, 2),
@@ -94,7 +103,7 @@ class PoseSystem
   void targetDump(std::vector<int>& ref_tag_ids, std::vector<double>& ref_tag_sizes, std::vector<Eigen::MatrixXd>& ref_tag_trans)
   {
     std::ofstream fout;
-    fout.open(getFilepath(TARGET));
+    fout.open(getBasepath()+"/targets.yaml");
     fout << "targets:"; 
     for(int tag_index=0; tag_index!=ref_tag_ids.size(); tag_index++)
     {
@@ -122,7 +131,7 @@ class PoseSystem
   //Calculates tag_T_cam for respective tag in specified file
   Eigen::MatrixXd tagTcam(int tag_loc, int filenum)
   {
-    YAML::Node YAML_handle = YAML::LoadFile(getFilepath(filenum));
+    YAML::Node YAML_handle = YAML::LoadFile(getDetfilePath(filenum));
     int bl_pix_x = YAML_handle["detections"][tag_loc]["corners"]["0"][0].as<int>();
     int bl_pix_y = YAML_handle["detections"][tag_loc]["corners"]["0"][1].as<int>();
     int br_pix_x = YAML_handle["detections"][tag_loc]["corners"]["1"][0].as<int>();
@@ -166,7 +175,7 @@ class PoseSystem
   //Calculates w_T_tag for all unreferenced tags in a file
   void tagCalc(int filenum, int known_tag_loc)
   {
-    YAML::Node YAML_handle = YAML::LoadFile(getFilepath(filenum));
+    YAML::Node YAML_handle = YAML::LoadFile(getDetfilePath(filenum));
     Eigen::MatrixXd w_T_cam(4, 4);
     Eigen::MatrixXd tag_T_cam(4, 4);
 
@@ -175,6 +184,9 @@ class PoseSystem
     w_T_cam = w_T_tags_trans[index] * tagTcam(known_tag_loc, filenum);
     worldAppend(filenum,w_T_cam);
 
+    /*For every tag of a given detection file, the world_T_cam is calculated and stored alongside both the tag id and
+    tag size provided that the file has not been seen before and stored && it is not the known tag used to 
+    reference all other tags in the file (world or known tag) */
     int total_tags_in_file = YAML_handle["detections"].size();
     for (int tag_index = 0; tag_index < total_tags_in_file; ++tag_index)
     {
@@ -196,7 +208,7 @@ class PoseSystem
   {
     int file_status(UNKNOWN); //initial status of file set as unknown
     std::ifstream fin;
-    fin.open(getFilepath(filenum));
+    fin.open(getDetfilePath(filenum));
     if (fin.is_open())
     {
       fin.close();
@@ -207,15 +219,15 @@ class PoseSystem
         return WORLD_PRES; //world tag present
       }
 
-      /*Despite the inclusion of the world tag in w_T_tags_id and its associated vectors, presence of the world tag is prioritised in file reading.
-      Each detected tag is referenced relative to the world tag. The uncertainty in stored world_T_tags would accumulate if new unseen tags were mapped using 
-      the tags that have been previously referenced to the world tag. To reduce this uncertainty in tag linking where possible, use of the
-      world tag is prioritised such that all tags can be directly mapped to the this tag provided it was detected in the frame. Unseen tags should only
-      be mapped using already referenced tags given that the world tag is not discernible */
-      YAML::Node YAML_handle = YAML::LoadFile(getFilepath(filenum));
+      YAML::Node YAML_handle = YAML::LoadFile(getDetfilePath(filenum));
       int total_tags_in_file = YAML_handle["detections"].size(); 
       for (int tag_index = 0; tag_index < total_tags_in_file; ++tag_index)
       {
+        /*Despite the inclusion of the world tag in w_T_tags_id and its associated vectors, presence of the world tag is prioritised in file reading.
+        Each detected tag is referenced relative to the world tag. The uncertainty in stored world_T_tags would accumulate if new unseen tags were mapped using 
+        the tags that have been previously referenced to the world tag. To reduce this uncertainty in tag linking where possible, use of the
+        world tag is prioritised such that all tags can be directly mapped to the this tag provided it was detected in the frame. Unseen tags should only
+        be mapped using already referenced tags given that the world tag is not discernible */
         if (YAML_handle["detections"][tag_index]["targetID"].as<int>() == kworld_tag) 
         {
           known_tag_in_file = tag_index;
@@ -251,15 +263,6 @@ class PoseSystem
   }  
 
   public: 
-  PoseSystem()
-  {
-    det_file_num=0;
-    kcam_matrix=cv::Mat(3,3,CV_64F,Scalar(0));
-    intrinsicLoad(kcam_matrix, kdistCoeffs);
-  }
-
-  ~PoseSystem(){}
-
   //streams all detection files for tag/pose processing 
   void fileStream()
   {
