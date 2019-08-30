@@ -43,7 +43,7 @@ Eigen::Quaterniond rodrigToQuat(double rod_vec[3])
 }
 
 //generates a pose message given a tag index in the targets.yaml file
-geometry_msgs::Pose LoadmarkerPose(int tag_index)
+geometry_msgs::Pose loadMarkerPose(int tag_index)
 {
 	geometry_msgs::Pose pose_msg;
 	YAML::Node YAML_handle= YAML::LoadFile(getTargetPath());
@@ -69,7 +69,7 @@ geometry_msgs::Pose LoadmarkerPose(int tag_index)
 void loadTagMarker(int tag_index, visualization_msgs::Marker& marker, geometry_msgs::Pose& pose_msg)
 {
 	YAML::Node YAML_handle= YAML::LoadFile(getTargetPath());
-	pose_msg = LoadmarkerPose(tag_index);
+	pose_msg = loadMarkerPose(tag_index);
 
 	marker.header.frame_id = "world"; 
 	marker.header.stamp = ros::Time();
