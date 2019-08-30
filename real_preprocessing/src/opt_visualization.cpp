@@ -180,7 +180,7 @@ int main(int argc, char **argv)
 	tagpose_array.header.frame_id = "world";
 	campose_array.header.frame_id = "world";
 
-	// Publish the world to tags from the targets.yaml
+	// Publish the world_T_tags from the targets.yaml
 	YAML::Node YAML_handle= YAML::LoadFile(getTargetpath());
 	for(int tag_index = 0; tag_index != YAML_handle["targets"].size(); tag_index++) 
 	{
@@ -192,7 +192,7 @@ int main(int argc, char **argv)
 		tagpose_array.poses.push_back(tag_pose);
 	}
 
-	// Continuously publish the world to Cam for each detection file
+	// Continuously publish the world_T_cam for each detection file
 	while (ros::ok())
 	{
 		tag_pub.publish(tag_array); 
