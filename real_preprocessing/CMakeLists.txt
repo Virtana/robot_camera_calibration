@@ -145,7 +145,7 @@ include_directories(
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
 add_executable(corner_detection_node src/corner_detections.cpp)
-#add_executable(camera_pose_node src/camera_pose.cpp)
+add_executable(camera_pose_node src/camera_pose.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -157,7 +157,7 @@ add_executable(corner_detection_node src/corner_detections.cpp)
 ## same as for the library above
 # add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 add_dependencies(corner_detection_node corner_detection_generate_messages_cpp)
-#add_dependencies(camera_pose_node camera_pose_generate_messages_cpp)
+add_dependencies(camera_pose_node camera_pose_generate_messages_cpp)
 
 ## Specify libraries to link a library or executable target against
  target_link_libraries(corner_detection_node
@@ -165,11 +165,11 @@ add_dependencies(corner_detection_node corner_detection_generate_messages_cpp)
    ${OpenCV_LIBRARIES}
  )
 
-# target_link_libraries(camera_pose_node	
-#   yaml-cpp
-#   ${catkin_LIBRARIES}
-#   ${OpenCV_LIBRARIES}
-# )
+ target_link_libraries(camera_pose_node	
+   yaml-cpp
+   ${catkin_LIBRARIES}
+   ${OpenCV_LIBRARIES}
+ )
 
 #############
 ## Install ##
