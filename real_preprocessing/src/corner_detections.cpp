@@ -1,5 +1,6 @@
 #include "ros/ros.h"
 #include "ros/package.h"
+#include "sys/stat.h"
 #include "apriltag_ros/AprilTagDetectionArray.h"
 #include "fstream"
 #include "string"
@@ -10,9 +11,13 @@ std::string capture("1");
 // populates YAML file with corner pixel coordinates per tag
 void yamlDump(double tag_size, int tag_id, std::pair<int, int> pix_coord[], std::ofstream& fout, int index)
 {
+  //creates folder directory for detection files 
+  std::string basepath = ros::package::getPath("real_preprocessing") + "/detections";
+  int dir = mkdir(basepath.c_str(),0777);
+
   // file name generation
-  std::string path = ros::package::getPath("real_preprocessing") + "/detections/detections_" + std::to_string(filenum) + ".yaml";  
-  std::string filename(path);
+  std::string filepath = basepath + "/detections_" + std::to_string(filenum) + ".yaml";  
+  std::string filename(filepath);
   if (index == 0)
   {
     fout.open(filename.c_str());
