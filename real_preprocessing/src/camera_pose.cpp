@@ -5,65 +5,109 @@
 #include "yaml-cpp/yaml.h"
 #include "string"
 #include "Eigen/Dense"
+#include "ros/package.h"
+
+#define TARGET -1
+#define WORLD_PRES 0
+#define KNOWN_TAG 1
+#define UNKNOWN 2
+#define NO_FILE 3
+
+//TODO: Create header file
 
 using namespace cv;
 
 class PoseSystem
 {
   public:
-  int file, world, world_loc, known_loc;
-  std::vector<int> w_T_tags_id;
-  std::vector<int> unknown_file;
-  std::vector<double> w_T_tags_size;
-  std::vector<Eigen::MatrixXd> w_T_tags_trans;
-
   PoseSystem()
   {
-    file=0;
+    det_file_num=0;
+    kcam_matrix=cv::Mat(3,3,CV_64F,Scalar(0));
+    intrinsicLoad(kcam_matrix, kdistCoeffs);
   }
 
   ~PoseSystem(){}
 
+  private:
+  int det_file_num, kworld_tag;
+  std::vector<int> w_T_tags_id;
+  std::vector<int> unreferenced_files;
+  std::vector<double> w_T_tags_size;
+  std::vector<Eigen::MatrixXd> w_T_tags_trans;
+  cv::Mat kcam_matrix;
+  cv::Vec<double, 5> kdistCoeffs;
+
+  //Returns the absolute directory path for package detections folder
+  std::string getBasepath()
+  {
+    return (ros::package::getPath("real_preprocessing") +"/detections");
+  }
+
+  //Returns the absolute directory path for detections files
+  std::string getDetfilePath(int filenum)
+  {
+    return (getBasepath() + "/detections_" + std::to_string(filenum) + ".yaml");
+  }
+
+
   //loads camera intrinsics from rosparam server
-  void intrinsicLoad(cv::Mat& cam_matrix, cv::Vec<float, 5>& distCoeffs)
+  void intrinsicLoad(cv::Mat& cam_matrix, cv::Vec<double, 5>& distCoeffs)
   {
     ros::NodeHandle NH;
     std::vector<double> intrinsic;
-    NH.getParam("/camera_matrix/data", intrinsic);
-    memcpy(cam_matrix.data,intrinsic.data(),intrinsic.size()*sizeof(double));
-    NH.getParam("/distortion_coefficients/data", intrinsic);
-    distCoeffs={intrinsic[0],intrinsic[1],intrinsic[2],intrinsic[3],intrinsic[4]};
+    if((NH.hasParam("/camera_matrix/data"))&&(NH.hasParam("/distortion_coefficients/data")))
+    {
+      NH.getParam("/camera_matrix/data", intrinsic);
+      memcpy(cam_matrix.data,intrinsic.data(),intrinsic.size()*sizeof(double));
+      NH.getParam("/distortion_coefficients/data", intrinsic);
+      distCoeffs={intrinsic[0],intrinsic[1],intrinsic[2],intrinsic[3],intrinsic[4]};
+    }
+    else 
+      ROS_ERROR("Camera intrinsics not loaded to parameter server!");
   }
 
-  //populates existing detection YAML fules with world T cam transforms
-  void worldAppend(int filenum, Eigen::MatrixXd wTcam)
+  //populates world tag data based on first image taken
+  void worldLoad()
   {
-    std::string filename("detections_"+std::to_string(filenum)+".yaml");  
+    YAML::Node YAML_handle = YAML::LoadFile(getDetfilePath(0));
+    kworld_tag = YAML_handle["detections"][0]["targetID"].as<int>(); //world tag chosen as first tag in list
+    Eigen::MatrixXd identity(4,4);
+    identity<<1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1;
+    w_T_tags_trans.push_back(identity);
+    w_T_tags_id.push_back(kworld_tag);
+    w_T_tags_size.push_back(YAML_handle["detections"][0]["size"][0].as<double>());
+  }
+
+  //Appends world_T_cam transform to respective detection YAML file
+  void worldAppend(int filenum, Eigen::MatrixXd w_T_cam)
+  {
+    std::string filename(getDetfilePath(filenum));  
     std::ofstream fout;
 
-    double rotation_vec[9]= {wTcam(0, 0),wTcam(0, 1),wTcam(0, 2),
-      wTcam(1, 0),wTcam(1, 1),wTcam(1, 2),
-      wTcam(2, 0),wTcam(2, 1),wTcam(2, 2)};
+    double rotation_vec[9]= {w_T_cam(0, 0),w_T_cam(0, 1),w_T_cam(0, 2),
+      w_T_cam(1, 0),w_T_cam(1, 1),w_T_cam(1, 2),
+      w_T_cam(2, 0),w_T_cam(2, 1),w_T_cam(2, 2)};
     cv::Mat rotation_mat=cv::Mat(3,3,CV_64F,rotation_vec);
     cv::Mat rodrigues;
     cv::Rodrigues(rotation_mat,rodrigues);
 
     fout.open(filename.c_str(),std::ios::app);
     fout<<"world_T_camera:";
-    fout<< "\n rotation: [ "+std::to_string(rodrigues.at<double>(0, 0))+" , "<< std::to_string(rodrigues.at<double>(0, 1)) +" , "+ std::to_string(rodrigues.at<double>(0, 2))+" ]";
-    fout<< "\n translation: [ "+std::to_string(wTcam(0, 3))+" , "<< std::to_string(wTcam(1, 3))+" , "+ std::to_string(wTcam(2, 3))+" ]";
+    fout<< "\n rotation: [ " + std::to_string(rodrigues.at<double>(0, 0)) + " , "<< std::to_string(rodrigues.at<double>(0, 1)) + " , " + std::to_string(rodrigues.at<double>(0, 2))+" ]";
+    fout<< "\n translation: [ " + std::to_string(w_T_cam(0, 3)) + " , "<< std::to_string(w_T_cam(1, 3)) + " , " + std::to_string(w_T_cam(2, 3)) + " ]";
     fout.close();
   }
 
   //generates YAML file with all mappable tags and their poses relative to the world tag
-  void targetDump(std::vector<int> id, std::vector<double> size, std::vector<Eigen::MatrixXd> trans)
+  void targetDump(std::vector<int>& ref_tag_ids, std::vector<double>& ref_tag_sizes, std::vector<Eigen::MatrixXd>& ref_tag_trans)
   {
     std::ofstream fout;
-    fout.open("targets.yaml");
+    fout.open(getBasepath()+"/targets.yaml");
     fout << "targets:"; 
-    for(int i=0;i!=id.size();i++)
+    for(int tag_index=0; tag_index!=ref_tag_ids.size(); tag_index++)
     {
-      Eigen::MatrixXd tag_trans=trans[i];
+      Eigen::MatrixXd tag_trans=ref_tag_trans[tag_index];
       double rotation_vec[9]= {tag_trans(0, 0),tag_trans(0, 1),tag_trans(0, 2),
         tag_trans(1, 0),tag_trans(1, 1),tag_trans(1, 2),
         tag_trans(2, 0),tag_trans(2, 1),tag_trans(2, 2)};
@@ -71,38 +115,38 @@ class PoseSystem
       cv::Mat rodrigues;
       cv::Rodrigues(rotation_mat,rodrigues);
 
-      fout << "\n - targetID: " << std::to_string(id[i]);
+      fout << "\n - targetID: " << std::to_string(ref_tag_ids[tag_index]);
       fout << "\n   world_T_target:";
-      fout << "\n    rotation: [ "+std::to_string(rodrigues.at<double>(0, 0))+" , "<< std::to_string(rodrigues.at<double>(0, 1)) +" , "+ std::to_string(rodrigues.at<double>(0, 2))+" ]";
-      fout << "\n    translation: [ "+std::to_string(tag_trans(0, 3))+" , "<< std::to_string(tag_trans(1, 3))+" , "+ std::to_string(tag_trans(2, 3))+" ]";
+      fout << "\n    rotation: [ " + std::to_string(rodrigues.at<double>(0, 0)) + " , "<< std::to_string(rodrigues.at<double>(0, 1)) + " , " + std::to_string(rodrigues.at<double>(0, 2)) + " ]";
+      fout << "\n    translation: [ " + std::to_string(tag_trans(0, 3)) + " , "<< std::to_string(tag_trans(1, 3)) + " , " + std::to_string(tag_trans(2, 3)) + " ]";
       fout << "\n   obj_points_in_target:";
-      fout << "\n    0: [ " + std::to_string(-(size[i]/2)) + ", " + std::to_string(-(size[i]/2)) + ", "+ std::to_string(0) +" ]"; //bl
-      fout << "\n    1: [ " + std::to_string(size[i]/2) + ", " + std::to_string(-(size[i]/2)) + ", "+ std::to_string(0) +" ]";  //br   
-      fout << "\n    2: [ " + std::to_string(size[i]/2) + ", " + std::to_string(size[i]/2) + ", "+ std::to_string(0) +" ]";   //tr
-      fout << "\n    3: [ " + std::to_string(-(size[i]/2)) + ", " + std::to_string(size[i]/2) + ", "+ std::to_string(0) +" ]";  //tl   
+      fout << "\n    0: [ " + std::to_string(-(ref_tag_sizes[tag_index]/2)) + ", " + std::to_string(-(ref_tag_sizes[tag_index]/2)) + ", " + std::to_string(0) + " ]"; //bl
+      fout << "\n    1: [ " + std::to_string(ref_tag_sizes[tag_index]/2) + ", " + std::to_string(-(ref_tag_sizes[tag_index]/2)) + ", " + std::to_string(0) + " ]";  //br   
+      fout << "\n    2: [ " + std::to_string(ref_tag_sizes[tag_index]/2) + ", " + std::to_string(ref_tag_sizes[tag_index]/2) + ", " + std::to_string(0) + " ]";   //tr
+      fout << "\n    3: [ " + std::to_string(-(ref_tag_sizes[tag_index]/2)) + ", " + std::to_string(ref_tag_sizes[tag_index]/2) + ", " + std::to_string(0) + " ]";  //tl   
     }
     fout.close();
   }
 
-  //solvePnP calculator given file number and tag position in file
-  Eigen::MatrixXd objTcam(int loc, int filenum)
+  //Calculates tag_T_cam for respective tag in specified file
+  Eigen::MatrixXd tagTcam(int tag_loc, int filenum)
   {
-    YAML::Node tags_pix = YAML::LoadFile("detections_" + std::to_string(filenum) + ".yaml");
-    int bl_pix_x = tags_pix["detections"][loc]["corners"]["0"][0].as<int>();
-    int bl_pix_y = tags_pix["detections"][loc]["corners"]["0"][1].as<int>();
-    int br_pix_x = tags_pix["detections"][loc]["corners"]["1"][0].as<int>();
-    int br_pix_y = tags_pix["detections"][loc]["corners"]["1"][1].as<int>();
-    int tr_pix_x = tags_pix["detections"][loc]["corners"]["2"][0].as<int>();
-    int tr_pix_y = tags_pix["detections"][loc]["corners"]["2"][1].as<int>();
-    int tl_pix_x = tags_pix["detections"][loc]["corners"]["3"][0].as<int>(); 
-    int tl_pix_y = tags_pix["detections"][loc]["corners"]["3"][1].as<int>();
-    int tag_id = tags_pix["detections"][loc]["targetID"].as<int>();
-    double tag_size = tags_pix["detections"][loc]["size"][0].as<double>();
+    YAML::Node YAML_handle = YAML::LoadFile(getDetfilePath(filenum));
+    int bl_pix_x = YAML_handle["detections"][tag_loc]["corners"]["0"][0].as<int>();
+    int bl_pix_y = YAML_handle["detections"][tag_loc]["corners"]["0"][1].as<int>();
+    int br_pix_x = YAML_handle["detections"][tag_loc]["corners"]["1"][0].as<int>();
+    int br_pix_y = YAML_handle["detections"][tag_loc]["corners"]["1"][1].as<int>();
+    int tr_pix_x = YAML_handle["detections"][tag_loc]["corners"]["2"][0].as<int>();
+    int tr_pix_y = YAML_handle["detections"][tag_loc]["corners"]["2"][1].as<int>();
+    int tl_pix_x = YAML_handle["detections"][tag_loc]["corners"]["3"][0].as<int>(); 
+    int tl_pix_y = YAML_handle["detections"][tag_loc]["corners"]["3"][1].as<int>();
+    int tag_id = YAML_handle["detections"][tag_loc]["targetID"].as<int>();
+    double tag_size = YAML_handle["detections"][tag_loc]["size"][0].as<double>();
 
     std::vector<cv::Point2d> img_pts;
     std::vector<cv::Point3d> obj_pts;
-    cv::Mat obj_T_cam_rvec;
-    cv::Mat obj_T_cam_tvec;
+    cv::Mat cam_T_tag_rvec;
+    cv::Mat cam_T_tag_tvec;
     cv::Mat rodrigues_rvec;
     
     img_pts.push_back(cv::Point2d(bl_pix_x, bl_pix_y));
@@ -116,141 +160,134 @@ class PoseSystem
     obj_pts.push_back(cv::Point3d((tag_size / 2), (tag_size / 2), 0));
     obj_pts.push_back(cv::Point3d(-(tag_size / 2), (tag_size / 2), 0));
 
-    cv::Mat cam_matrix(3,3,CV_64F);
-    cv::Vec<float, 5> distCoeffs;
-    intrinsicLoad(cam_matrix, distCoeffs);
-
-    cv::solvePnP(obj_pts, img_pts, cam_matrix, distCoeffs, rodrigues_rvec, obj_T_cam_tvec, false, CV_ITERATIVE);
-    cv::Rodrigues(rodrigues_rvec, obj_T_cam_rvec); //rotational matrix conversion
+    cv::solvePnP(obj_pts, img_pts, kcam_matrix, kdistCoeffs, rodrigues_rvec, cam_T_tag_tvec, false, CV_ITERATIVE);
+    cv::Rodrigues(rodrigues_rvec, cam_T_tag_rvec); //rotational matrix conversion
     
-    Eigen::MatrixXd obj_T_cam(4, 4);
-    obj_T_cam << obj_T_cam_rvec.at<double>(0, 0), obj_T_cam_rvec.at<double>(0, 1), obj_T_cam_rvec.at<double>(0, 2),
-        obj_T_cam_tvec.at<double>(0, 0), obj_T_cam_rvec.at<double>(1, 0), obj_T_cam_rvec.at<double>(1, 1),
-        obj_T_cam_rvec.at<double>(1, 2), obj_T_cam_tvec.at<double>(0, 1), obj_T_cam_rvec.at<double>(2, 0),
-        obj_T_cam_rvec.at<double>(2, 1), obj_T_cam_rvec.at<double>(2, 2), obj_T_cam_tvec.at<double>(0, 2), 0, 0, 0, 1;
+    Eigen::MatrixXd cam_T_tag(4, 4);
+    cam_T_tag << cam_T_tag_rvec.at<double>(0, 0), cam_T_tag_rvec.at<double>(0, 1), cam_T_tag_rvec.at<double>(0, 2),
+        cam_T_tag_tvec.at<double>(0, 0), cam_T_tag_rvec.at<double>(1, 0), cam_T_tag_rvec.at<double>(1, 1),
+        cam_T_tag_rvec.at<double>(1, 2), cam_T_tag_tvec.at<double>(0, 1), cam_T_tag_rvec.at<double>(2, 0),
+        cam_T_tag_rvec.at<double>(2, 1), cam_T_tag_rvec.at<double>(2, 2), cam_T_tag_tvec.at<double>(0, 2), 0, 0, 0, 1;
     
-    return obj_T_cam.inverse().eval();
+    return cam_T_tag.inverse().eval();
   }
 
-  //Calculates w_T_tag for all unknown tags in a file
-  void tagCalc(int filenum, int loc, bool world_pres)
+  //Calculates w_T_tag for all unreferenced tags in a file
+  void tagCalc(int filenum, int known_tag_loc)
   {
-    YAML::Node tags_pix = YAML::LoadFile("detections_" + std::to_string(filenum) + ".yaml");
+    YAML::Node YAML_handle = YAML::LoadFile(getDetfilePath(filenum));
     Eigen::MatrixXd w_T_cam(4, 4);
-    if(world_pres==0)
-    {
-      std::vector<int>::iterator it = std::find(w_T_tags_id.begin(), w_T_tags_id.end(), tags_pix["detections"][loc]["targetID"].as<int>());
-      int index = std::distance(w_T_tags_id.begin(), it);
-      w_T_cam = w_T_tags_trans[index] * objTcam(loc, filenum);
-    }
-    if(world_pres==1)
-    {
-      w_T_cam=objTcam(loc,filenum);
-    }
+    Eigen::MatrixXd tag_T_cam(4, 4);
+
+    std::vector<int>::iterator it = std::find(w_T_tags_id.begin(), w_T_tags_id.end(), YAML_handle["detections"][known_tag_loc]["targetID"].as<int>());
+    int index = std::distance(w_T_tags_id.begin(), it);
+    w_T_cam = w_T_tags_trans[index] * tagTcam(known_tag_loc, filenum);
     worldAppend(filenum,w_T_cam);
-    for (int i = 0; i < tags_pix["detections"].size(); ++i)
+
+    /*For every tag of a given detection file, the world_T_cam is calculated and stored alongside both the tag id and
+    tag size provided that the file has not been seen before and stored && it is not the known tag used to 
+    reference all other tags in the file (world or known tag) */
+    int total_tags_in_file = YAML_handle["detections"].size();
+    for (int tag_index = 0; tag_index < total_tags_in_file; ++tag_index)
     {
-      if ((i != loc) &&
-          ((std::find(w_T_tags_id.begin(), w_T_tags_id.end(), tags_pix["detections"][i]["targetID"].as<int>()) !=
+      if ((tag_index != known_tag_loc) &&
+          ((std::find(w_T_tags_id.begin(), w_T_tags_id.end(), YAML_handle["detections"][tag_index]["targetID"].as<int>()) !=
             w_T_tags_id.end()) == false))
       {
-        Eigen::MatrixXd obj_T_cam(4, 4);
-        obj_T_cam = objTcam(i, filenum);
-        w_T_tags_trans.push_back((w_T_cam * obj_T_cam.inverse().eval()));
-        w_T_tags_id.push_back(tags_pix["detections"][i]["targetID"].as<int>());
-        w_T_tags_size.push_back(tags_pix["detections"][i]["size"][0].as<double>());
+        tag_T_cam = tagTcam(tag_index, filenum);
+        w_T_tags_trans.push_back((w_T_cam * tag_T_cam.inverse().eval()));
+        w_T_tags_id.push_back(YAML_handle["detections"][tag_index]["targetID"].as<int>());
+        w_T_tags_size.push_back(YAML_handle["detections"][tag_index]["size"][0].as<double>());
       }
     }
   }
-
+  
   //Returns status of file : world tag present, known tag present, all unknown tags, no file
-  int fileReader(int filenum)
+  //known_tag_in_file is an updated location of the last known tag or the world tag present in "detections_(filenum)"
+  int fileReader(int filenum, int& known_tag_in_file)
   {
-    bool known_tag(0);
+    int file_status(UNKNOWN); //initial status of file set as unknown
     std::ifstream fin;
-    fin.open("detections_" + std::to_string(filenum) + ".yaml");
+    fin.open(getDetfilePath(filenum));
     if (fin.is_open())
     {
       fin.close();
-      YAML::Node tags_pix = YAML::LoadFile("detections_" + std::to_string(filenum) + ".yaml");
-      if (filenum == 0)//polling first file?
+      if (filenum == 0)
       {
-        world = tags_pix["detections"][0]["targetID"].as<int>(); //world tag chosen in first file/first tag listing
-        world_loc = 0;
-        return 0; //world tag present
+        known_tag_in_file = 0;
+        worldLoad();
+        return WORLD_PRES; //world tag present
       }
-      for (int i = 0; i < tags_pix["detections"].size(); ++i)
+
+      YAML::Node YAML_handle = YAML::LoadFile(getDetfilePath(filenum));
+      int total_tags_in_file = YAML_handle["detections"].size(); 
+      for (int tag_index = 0; tag_index < total_tags_in_file; ++tag_index)
       {
-        if (std::find(w_T_tags_id.begin(), w_T_tags_id.end(), tags_pix["detections"][i]["targetID"].as<int>()) !=w_T_tags_id.end())
+        /*Despite the inclusion of the world tag in w_T_tags_id and its associated vectors, presence of the world tag is prioritised in file reading.
+        Each detected tag is referenced relative to the world tag. The uncertainty in stored world_T_tags would accumulate if new unseen tags were mapped using 
+        the tags that have been previously referenced to the world tag. To reduce this uncertainty in tag linking where possible, use of the
+        world tag is prioritised such that all tags can be directly mapped to the this tag provided it was detected in the frame. Unseen tags should only
+        be mapped using already referenced tags given that the world tag is not discernible */
+        if (YAML_handle["detections"][tag_index]["targetID"].as<int>() == kworld_tag) 
         {
-          known_tag = 1;
-          known_loc = i;
+          known_tag_in_file = tag_index;
+          return WORLD_PRES; //world tag present
         }
-        if (tags_pix["detections"][i]["targetID"].as<int>() == world) 
+        if (std::find(w_T_tags_id.begin(), w_T_tags_id.end(), YAML_handle["detections"][tag_index]["targetID"].as<int>()) !=w_T_tags_id.end())
         {
-          world_loc = i;
-          return 0; //world tag present
+          known_tag_in_file = tag_index;
+          file_status = KNOWN_TAG; //file status updated provided referenced file is encountered
         }
       }
-      if (known_tag == 1)
-      {
-        return 1; //known tag present
-      }
-      else
-        return 2; //all unknown tags
+      return file_status;
     }
-    else
-      return 3; //file does not exist - end of YAML list
+    else 
+      return NO_FILE; //file does not exist - end of YAML list
   }
 
-  //Polls for unknown files to be reprocessed 
-  void unknownPoll()
+  //Reprocesses recorded files with all unknown tags  
+  void unknownFilepoll()
   {
-    if (unknown_file.size() != 0) 
+    if (unreferenced_files.size() != 0) 
+    {
+      for (int tag_index = (unreferenced_files.size() - 1); tag_index >= 0; tag_index--)
       {
-        for (int i = (unknown_file.size() - 1); i >= 0; i--)
+        int known_tag_in_file;
+        if (fileReader(unreferenced_files[tag_index],known_tag_in_file) == KNOWN_TAG)
         {
-          if (fileReader(unknown_file[i]) == 1)
-          {
-            tagCalc(unknown_file[i],known_loc,0);
-            unknown_file.erase(unknown_file.begin() + i);
-          }
+          tagCalc(unreferenced_files[tag_index],known_tag_in_file);
+          unreferenced_files.erase(unreferenced_files.begin() + tag_index);
         }
       }
+    }
   }  
 
-  //streams all snapshot detection files for tag/pose processing 
+  public: 
+  //streams all detection files for tag/pose processing 
   void fileStream()
   {
-    while (fileReader(file) != 3)
+    int known_tag_in_file;
+    int status = fileReader(det_file_num,known_tag_in_file);
+    if (status != NO_FILE)
     {
-      if (fileReader(file) == 0) //world tag present
+      if ((status == WORLD_PRES)||(status == KNOWN_TAG)) //world tag or known tags present
       {
-        unknownPoll();
-        tagCalc(file,world_loc,1);
-        
+        tagCalc(det_file_num,known_tag_in_file);
+        unknownFilepoll();
       }
-      if (fileReader(file) == 1) // known tag present
+      else if (status == UNKNOWN) //all unknown tags
       {
-        tagCalc(file,known_loc,0);
-        unknownPoll();
+        unreferenced_files.push_back(det_file_num); //records file number of file with all unknown tags
       }
-      if (fileReader(file) == 2) //all unknown tags
-      {
-        unknown_file.push_back(file); //stores file with all unknown tags
-      }
-      file++;
-      if (fileReader(file) == 3) //end of YAML list 
-      {
-        targetDump(w_T_tags_id,w_T_tags_size,w_T_tags_trans);
-      }
+      det_file_num++;
+      targetDump(w_T_tags_id,w_T_tags_size,w_T_tags_trans);
     }
   }
 
 };
 
- int main(int argc, char** argv)
- {
+int main(int argc, char** argv)
+{
   ros::init(argc, argv, "camera_pose");
   ros::NodeHandle nh;
   PoseSystem cam;
@@ -258,6 +295,5 @@ class PoseSystem
   {
     cam.fileStream();
   }
-
   return 0;
 }
