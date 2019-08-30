@@ -1,7 +1,6 @@
 #include "ros/ros.h"
 #include "ros/package.h"
 #include "sys/stat.h"
-#include "experimental/filesystem"
 #include "apriltag_ros/AprilTagDetectionArray.h"
 #include "fstream"
 #include "string"
