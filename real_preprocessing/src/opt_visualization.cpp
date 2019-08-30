@@ -11,21 +11,21 @@
 #include "geometry_msgs/PoseArray.h"
 
 //Returns the absolute directory path for package detections folder
-std::string getBasepath()
+std::string getBasePath()
 {
-return (ros::package::getPath("real_preprocessing") +"/detections");
+	return (ros::package::getPath("real_preprocessing") +"/detections");
 }
 
 //Returns the absolute directory path for detections files
 std::string getDetfilePath(int filenum)
 {
-return (getBasepath() + "/detections_" + std::to_string(filenum) + ".yaml");
+	return (getBasePath() + "/detections_" + std::to_string(filenum) + ".yaml");
 }
 
 //Returns the absolute directory path for targets yaml file
-std::string getTargetpath()
+std::string getTargetPath()
 {
-return (getBasepath() + "/targets.yaml");
+	return (getBasePath() + "/targets.yaml");
 }
 
 //converts and returns a quaternion given a rodrigues angle
@@ -46,7 +46,7 @@ Eigen::Quaterniond rodrigToQuat(double rod_vec[3])
 geometry_msgs::Pose LoadmarkerPose(int tag_index)
 {
 	geometry_msgs::Pose pose_msg;
-	YAML::Node YAML_handle= YAML::LoadFile(getTargetpath());
+	YAML::Node YAML_handle= YAML::LoadFile(getTargetPath());
 	
 	pose_msg.position.x = YAML_handle["targets"][tag_index]["world_T_target"]["translation"][0].as<double>();
 	pose_msg.position.y = YAML_handle["targets"][tag_index]["world_T_target"]["translation"][1].as<double>();
@@ -65,10 +65,10 @@ geometry_msgs::Pose LoadmarkerPose(int tag_index)
 	return pose_msg;
 }
 
-//populates a visualization marker message given a pose and tag index in the targets.yaml file 
-void loadTagmarker(int tag_index, visualization_msgs::Marker& marker, geometry_msgs::Pose& pose_msg)
+//populates a tag marker message with a world_T_tag pose of the indexed tag in the targets.yaml file 
+void loadTagMarker(int tag_index, visualization_msgs::Marker& marker, geometry_msgs::Pose& pose_msg)
 {
-	YAML::Node YAML_handle= YAML::LoadFile(getTargetpath());
+	YAML::Node YAML_handle= YAML::LoadFile(getTargetPath());
 	pose_msg = LoadmarkerPose(tag_index);
 
 	marker.header.frame_id = "world"; 
@@ -86,10 +86,9 @@ void loadTagmarker(int tag_index, visualization_msgs::Marker& marker, geometry_m
 	marker.color.g = 1;
 	marker.color.b = 1;
 	marker.lifetime = ros::Duration();
-
 }
 
-//updates the trajectory marker with all camera poses
+//generates the trajectory marker with all past camera poses
 visualization_msgs::Marker trajMarker(geometry_msgs::PoseArray campose_array)
 {
 	visualization_msgs::Marker traj_marker;
@@ -115,7 +114,7 @@ visualization_msgs::Marker trajMarker(geometry_msgs::PoseArray campose_array)
 	return traj_marker;
 }
 
-geometry_msgs::Pose getCampose(int filenum)
+geometry_msgs::Pose loadCamPose(int filenum)
 {
 	YAML::Node YAML_handle = YAML::LoadFile(getDetfilePath(filenum));
 
@@ -137,10 +136,10 @@ geometry_msgs::Pose getCampose(int filenum)
 	return cam_pose;
 }
 
-//populates camera marker with world_T_cam from given file number
-void camUpdate(int filenum, visualization_msgs::Marker& cam_marker, geometry_msgs::Pose& cam_pose)
+//generates camera marker with world_T_cam pose from given file number 
+void loadCamMarker(int filenum, visualization_msgs::Marker& cam_marker, geometry_msgs::Pose& cam_pose)
 {
-	cam_pose = getCampose(filenum);
+	cam_pose = loadCamPose(filenum);
 
 	cam_marker.header.frame_id = "world"; 
 	cam_marker.header.stamp = ros::Time();
@@ -180,19 +179,19 @@ int main(int argc, char **argv)
 	tagpose_array.header.frame_id = "world";
 	campose_array.header.frame_id = "world";
 
-	// Publish the world_T_tags from the targets.yaml
-	YAML::Node YAML_handle= YAML::LoadFile(getTargetpath());
+	//Get the world_T_tags from the targets.yaml
+	YAML::Node YAML_handle= YAML::LoadFile(getTargetPath());
 	for(int tag_index = 0; tag_index != YAML_handle["targets"].size(); tag_index++) 
 	{
 		geometry_msgs::Pose tag_pose;
 		visualization_msgs::Marker tag_marker;
-		loadTagmarker(tag_index, tag_marker, tag_pose);
+		loadTagMarker(tag_index, tag_marker, tag_pose);
 
 		tag_array.markers.push_back(tag_marker);
 		tagpose_array.poses.push_back(tag_pose);
 	}
 
-	// Continuously publish the world_T_cam for each detection file
+	//Continuously publish the world_T_cam for each detection file and all world_T_tags
 	while (ros::ok())
 	{
 		tag_pub.publish(tag_array); 
@@ -204,7 +203,7 @@ int main(int argc, char **argv)
 		{
 			geometry_msgs::Pose cam_pose;
 			visualization_msgs::Marker cam_marker;
-			camUpdate(filenum, cam_marker, cam_pose);
+			loadCamMarker(filenum, cam_marker, cam_pose);
 			campose_array.poses.push_back(cam_pose);
 			visualization_msgs::Marker traj_marker = trajMarker(campose_array); 
 
