@@ -42,7 +42,7 @@ Eigen::Quaterniond rodrigToQuat(double rod_vec[3])
 	return quat;
 }
 
-//generates a pose message given a tag index in the targets.yaml file
+//generates a pose message given a tag index to load from the targets.yaml file
 geometry_msgs::Pose loadMarkerPose(int tag_index)
 {
 	geometry_msgs::Pose pose_msg;
@@ -65,7 +65,7 @@ geometry_msgs::Pose loadMarkerPose(int tag_index)
 	return pose_msg;
 }
 
-//populates a tag marker message with a world_T_tag pose of the indexed tag in the targets.yaml file 
+//populates a tag marker and tag pose message given a tag index to load the world_T_tag pose from the targets.yaml file 
 void loadTagMarker(int tag_index, visualization_msgs::Marker& marker, geometry_msgs::Pose& pose_msg)
 {
 	YAML::Node YAML_handle= YAML::LoadFile(getTargetPath());
@@ -114,6 +114,7 @@ visualization_msgs::Marker trajMarker(geometry_msgs::PoseArray campose_array)
 	return traj_marker;
 }
 
+//generate a pose message, given a filenum to load the world_T_cam from a detections_X.yaml file
 geometry_msgs::Pose loadCamPose(int filenum)
 {
 	YAML::Node YAML_handle = YAML::LoadFile(getDetfilePath(filenum));
@@ -136,7 +137,7 @@ geometry_msgs::Pose loadCamPose(int filenum)
 	return cam_pose;
 }
 
-//generates camera marker with world_T_cam pose from given file number 
+//populates a camera marker and pose message given a file number to load the world_T_cam 
 void loadCamMarker(int filenum, visualization_msgs::Marker& cam_marker, geometry_msgs::Pose& cam_pose)
 {
 	cam_pose = loadCamPose(filenum);
@@ -212,7 +213,6 @@ int main(int argc, char **argv)
 			cam_traj_pub.publish(traj_marker);
 			
 			filenum++;
-			
 		}
 		loop_rate.sleep(); 
 	}
