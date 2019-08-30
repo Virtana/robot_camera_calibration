@@ -1,32 +1,89 @@
 # real\_preprocessing
 
-### Additional packages  
+### Workspace Setup
 
-* [apriltag\_ros](https://github.com/AprilRobotics/apriltag_ros)
-* [cv\_bridge](http://wiki.ros.org/cv_bridge)
-* [tf\_conversions](http://wiki.ros.org/tf_conversions)
+    
+##### 1. Package Installation
 
-[OpenCV](https://www.learnopencv.com/install-opencv-3-4-4-on-ubuntu-16-04/) was installed on Ubuntu 16.04 and included in CMakeLists.txt as follows
+**_Step 1_**.  Create a workspace folder.
 
-	find_package(find_package(OpenCV REQUIRED PATHS "YOUR-FOLDER-PATH")
+**_Step 2_**.  Inside the workspace folder, create a folder labelled "src".
 
-### apriltag_ros library 
-The **apriltag\_ros** library was forked and modified to publish pixel coordinates of detected tags on the /tag_detections rostopic. This was done as an alternative method to the homography concepts which used camera intrinsics for pixel point determination. This fork can be found [here](https://github.com/DAA2310/apriltag_ros/tree/milestone_1b_pipeline) and is the assumed publisher to **corner\_detections.cpp**.
+**_Step 3_**.  All packages with the main project repository `robot_camera_calibration` are to be cloned in this subfolder. 
 
-### Camera calibration
-The package requires calibration of the camera for an initial guess of the camera intrinsics, to be used for OpenCV's SolvePNP function. This was done using [camera\_calibration](http://wiki.ros.org/camera_calibration). The calibration package generates a "camera.yaml" file which is used in **camera\_pose.cpp**.
+Packages to be cloned include :
+* [apriltag\_ros](https://github.com/DAA2310/apriltag_ros/tree/milestone_1b_pipeline) 
+* [apriltag](https://github.com/AprilRobotics/apriltag)
+* [vision\_opencv](https://github.com/ros-perception/vision_opencv/tree/kinetic)
+* [image\_pipeline](https://github.com/ros-perception/image_pipeline/tree/kinetic)
+* [yaml-cpp](https://github.com/jbeder/yaml-cpp)
 
-### Image publishing 
-**corner\_detections.cpp** simulates image capture with user input. By default, `""` /`ENTER` is the assigned trigger for image processing and YAML dumping. The YAML file for each frame detection is dumped at the working directory named "detection_n.yml" for the nth image taken. To view the video stream detection, [image\_view](http://wiki.ros.org/image_view) was the library included. Rviz can be used alternatively with some configuration.
+**_Step 4_**. Run all terminal installations. 
 
-### File handling
-**corner\_detections.cpp** generates detection YAML files in the directory in which it is called. Until a launch file is implemented, **camera\_pose.cpp** must be run in the same directory such that these YAML files can be parsed. 
+Those to be installed through terminal commands include:
 
-### Steps: 
+* cv\_camera - ` $ sudo apt-get ros-kinetic-cv-camera`
+* tf\_conversions - ` $ sudo apt-get ros-kinetic-tf-conversions`
+* tf2\_geometry\_msgs -  `$ sudo apt-get install ros-kinetic-tf2-geometry-msgs`
+
+
+**_Step 5_**. apriltag_ros fork library 
+
+The **apriltag\_ros** library was forked and modified, through the `milestone_1b_pipeline` branch, to publish pixel coordinates of detected tags on the `/tag_detections` rostopic. In the package repository, the following should be run:
+
+`$ git checkout milestone_1b_pipeline`
+
+This was done as an alternative method to the homography concepts which used camera intrinsics for pixel point determination. 
+
+**_Step 6_**. OpenCV
+
+[OpenCV](https://www.learnopencv.com/install-opencv-3-4-4-on-ubuntu-16-04/) was installed on Ubuntu 16.04. Create a folder labelled `OpenCV` and follow Steps 0, 1, 4 and 5 under heading `1. Install OpenCV 3.4.4`. When this is completed, CMakeLists.txt for the **real\_preprocessing** package must be edited to reflect OpenCV's directory path.
+
+`find_package(find_package(OpenCV REQUIRED PATHS "YOUR-FOLDER-PATH")`
+
+**_Step 7_**. Building your project is done from within the main workspace folder.
+    
+Building your workspace for the **real\_preprocessing** package is achieved using:
+
+`$ catkin_make_isolated --pkg camera_calibration cv_bridge image_geometry apriltag_ros depth_image_proc image_pipeline image_proc image_publisher image_rotate image_view opencv_tests real_preprocessing vision_opencv`
+
+### Milestone 1
+
+This milestone deals with data generation. **corner\_detections.cpp** simulates image capture of a video stream through user input, generating YAML detections files for each frame in which Apriltags are detected. These files are populated with the tag IDs, size and their corner pixel coordinates. By default, `ENTER` is the assigned trigger for image processing and YAML dumping. The YAML file for each frame detection is dumped in the auto-generated `detections` folder of the **real\_preprocessing** package. The files are named "detection_n.yml" for the nth image taken. To view the video stream detection, [image\_view](http://wiki.ros.org/image_view) was the library used. 
+
+##### camera_calibration
+The package requires calibration of the camera for accurate pixel detection in this milestone and for use in OpenCV's SolvePNP function in Milestone 2. This was done using [camera\_calibration](http://wiki.ros.org/camera_calibration?distro=kinetic), a constituent of **image\_pipeline**. The calibration package generates a "camera.yaml" file which is loaded to be used in **camera\_pose.cpp**. **cv\_camera** must be run as the camera's driver prior to calibration. 
+* `$ rosrun cv_camera cv_camera_node `
+* `$ rosrun camera_calibration cameracalibrator.py --size 8x6 --square 0.108 image:=/cv_camera/image_raw camera:=/cv_camera`
+
+Further instructions on how to calibrate are included [here](http://wiki.ros.org/camera_calibration/Tutorials/MonocularCalibration).
+
+	
+##### Running Milestone 1 
+	1.  $ roscore 
+	2.  $ rosrun cv_camera cv_camera_node
+	3.  $ roslaunch apriltag_ros continuous_detection.launch camera_name:=/cv_camera image_topic:=image_raw 
+	4.  $ rosrun image_view image_view image:=tag_detections_image
+	5.  $ rosrun real_preprocessing corner_detection_node
+
+
+### Milestone 2
+
+**corner\_detections.cpp** is a direct pipeline to Milestone 2's **camera\_pose.cpp**. The detection files generated in the first milestone are processed to produce `targets.yaml` and appends the nth world_T_cam pose to "detections_n.yaml" for n files. `targets.yaml` documents all tags mapped to the world tag with their tag IDs, object points and world_T_tag poses.   
+
+Given that **corner\_detections.cpp** was run such that the `detections` folder is populated with detections_n.yaml files, Milestone 2 can be run.
+
+##### Running Milestone 2 
 	1.  $ roscore 
 	2.  $ rosparam load ~/.ros/camera_info/camera.yaml
-	3.  $ rosrun cv_camera cv_camera_node 
-	4.  $ roslaunch apriltag_ros continuous_detection.launch camera_name:=/cv_camera image_topic:=image_raw 
-	5.  $ rosrun image_view image_view image:=tag_detections_image
-	6.  $ rosrun real_preprocessing corner_detection_node
-	7.  $ rosrun real_preprocessing camera_pose_node
+	3.  $ rosrun real_preprocessing camera_pose_node
+	
+
+### Milestone 4
+
+**opt\_visualization.cpp** serves as a visualizer for the files processed and generated by **camera\_pose.cpp**. It gives a visual of the Apriltags as they exist with respect to the world tag and highlights the camera's path and pose across the captured images. Provided that Milestone 2 was run successfully, Milestone 4 can be used. 
+
+##### Running Milestone 4: 
+	1.  $ roscore 
+	2.  $ rviz
+	3.  $ rosrun real_preprocessing opt_visualization
