@@ -8,22 +8,19 @@
 int filenum(0);
 std::string capture("1");
 
+//Returns the absolute directory path for package detections folder
+std::string getBasePath()
+{
+	return (ros::package::getPath("real_preprocessing") +"/detections");
+}
+
 // populates YAML file with corner pixel coordinates per tag
 void yamlDump(double tag_size, int tag_id, std::pair<int, int> pix_coord[], std::ofstream& fout, int index)
 {
   // file name generation
-  std::string basepath = ros::package::getPath("real_preprocessing") + "/detections";
-  std::string filepath = basepath + "/detections_" + std::to_string(filenum) + ".yaml";  
+  std::string filepath = getBasePath() + "/detections_" + std::to_string(filenum) + ".yaml";  
   std::string filename(filepath);
 
-  if ((filenum == 0)&&(index==0))
-  {
-    //clears existing folder directory
-    std::string clr_dir = "rm -rf " + basepath;
-    system(clr_dir.c_str());
-    //creates folder directory for detection files if it does not exist
-    int dir = mkdir(basepath.c_str(),0744);
-  }
   if (index == 0)
   {
     fout.open(filename.c_str());
@@ -69,6 +66,12 @@ void aprilDetection(const apriltag_ros::AprilTagDetectionArray::ConstPtr& msg)
 
 int main(int argc, char** argv)
 {
+  //clears existing folder directory
+  std::string clr_dir = "rm -rf " + getBasePath();
+  system(clr_dir.c_str());
+  //creates folder directory for detection files if it does not exist
+  int dir = mkdir(getBasePath().c_str(),0744);
+
   ros::init(argc, argv, "corner_detection");
   ros::NodeHandle nh;
   ros::Subscriber sub = nh.subscribe("tag_detections", 1, aprilDetection);
