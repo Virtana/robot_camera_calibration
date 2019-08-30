@@ -146,6 +146,7 @@ include_directories(
 ## The recommended prefix ensures that target names across packages don't collide
 add_executable(corner_detection_node src/corner_detections.cpp)
 add_executable(camera_pose_node src/camera_pose.cpp)
+add_executable(opt_vis_node src/opt_visualization.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -158,6 +159,7 @@ add_executable(camera_pose_node src/camera_pose.cpp)
 # add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 add_dependencies(corner_detection_node corner_detection_generate_messages_cpp)
 add_dependencies(camera_pose_node camera_pose_generate_messages_cpp)
+add_dependencies(opt_vis_node opt_vis_generate_messages_cpp)
 
 ## Specify libraries to link a library or executable target against
  target_link_libraries(corner_detection_node
@@ -166,6 +168,12 @@ add_dependencies(camera_pose_node camera_pose_generate_messages_cpp)
  )
 
  target_link_libraries(camera_pose_node	
+   yaml-cpp
+   ${catkin_LIBRARIES}
+   ${OpenCV_LIBRARIES}
+ )
+
+  target_link_libraries(opt_vis_node	
    yaml-cpp
    ${catkin_LIBRARIES}
    ${OpenCV_LIBRARIES}
