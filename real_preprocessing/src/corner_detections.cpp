@@ -66,11 +66,12 @@ void aprilDetection(const apriltag_ros::AprilTagDetectionArray::ConstPtr& msg)
 
 int main(int argc, char** argv)
 {
-  //clears existing folder directory
-  std::string clr_dir = "rm -rf " + getBasePath();
-  system(clr_dir.c_str());
   //creates folder directory for detection files if it does not exist
   int dir = mkdir(getBasePath().c_str(),0744);
+  //clears existing folder directory
+  std::string clr_dir = "rm -rf " + getBasePath() + "/*";
+  system(clr_dir.c_str());
+  
 
   ros::init(argc, argv, "corner_detection");
   ros::NodeHandle nh;
