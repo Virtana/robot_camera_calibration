@@ -33,7 +33,6 @@
 #define RVIZ_SIMULATOR_TARGET_H
 
 #include <interactive_markers/interactive_marker_server.h>
-#include <tf/tf.h>
 
 namespace rviz_simulator
 {
@@ -42,36 +41,46 @@ namespace rviz_simulator
 class Target
 {
 public:
-  /// @param marker_frame_id                RViz fixed frame: chosen name: "ROSWorld"
-  /// @param marker_name                    Target name (ex: tag0, tag1, tag2)
-  /// @param marker_position_in_ROSWorld    Initial position of tag in ROSWorld
-  /// @param marker_color_RGBA              Marker colour (red, green blue) and opacity setting
-  /// @param g_interactive_marker_server    Shared pointer for interactive marker server
+  /// @param marker_frame_id                  RViz fixed frame: chosen name: "ROSWorld"
+  /// @param marker_name                      Target name (ex: tag0, tag1, tag2)
+  /// @param marker_position_in_ROSWorld      Initial position of tag in ROSWorld
+  /// @param marker_orientation_in_ROSWorld   Initial orientation of tag in ROSWorld
+  /// @param marker_color_RGBA                Marker colour (red, green blue) and opacity setting
+  /// @param target_size                      Vector of size 3 denoting the marker's [length, width, depth] dimensions 
+  /// @param g_interactive_marker_server      Shared pointer for interactive marker server
+  /// @param interaction_mode                 Specifies how the marker will react to events (3D MOVEMENT or BUTTON
+  /// clicks)
   Target(const std::string marker_frame_id, const std::string marker_name,
-         const geometry_msgs::Point marker_position_in_ROSWorld, const std_msgs::ColorRGBA marker_color_RGBA,
-         double marker_scale,
-         boost::shared_ptr<interactive_markers::InteractiveMarkerServer> g_interactive_marker_server);
+         const geometry_msgs::Point marker_position_in_ROSWorld,
+         const geometry_msgs::Quaternion marker_orientation_in_ROSWorld, const std_msgs::ColorRGBA marker_color_RGBA,
+         std::vector<double> target_size,
+         boost::shared_ptr<interactive_markers::InteractiveMarkerServer> g_interactive_marker_server,
+         unsigned int interaction_mode);
 
   /// Destructor
   ~Target();
 
   /// Adds target to shared interactive marker server.
-  void addInteractiveMarkerToServer();
+  void addTargetToServer();
 
 protected:
   /// Server pointer is stored as a member variable.
   boost::shared_ptr<interactive_markers::InteractiveMarkerServer> g_interactive_marker_server_;
 
+  /// The interactive marker.
+  visualization_msgs::InteractiveMarker interactive_marker_;
+
+  /// The name of the interactive marker
+  std::string marker_name_;
+
 private:
   /// Marker properties.
   std::string marker_frame_id_;
-  std::string marker_name_;
   geometry_msgs::Point marker_position_in_ROSWorld_;
+  geometry_msgs::Quaternion marker_orientation_in_ROSWorld_;
   std_msgs::ColorRGBA marker_color_RGBA_;
-  double marker_scale_;
-
-  /// The interactive marker.
-  visualization_msgs::InteractiveMarker interactive_marker_;
+  std::vector<double> target_size_;
+  unsigned int interaction_mode_;
 
   /// Makes the cube representative of the marker and sets its characteristics.
   /// @param msg        Reference to the interactive marker message.
@@ -88,10 +97,9 @@ private:
   /// @param    Initial position of marker in ROSWorld.
   void make6DofMarker(const geometry_msgs::Point& position);
 
-  /// Function to call on the arrival of a feedback message.
+  /// Function to call on the arrival of a feedback message (3D movement of target).
   /// @param    Reference for marker message.
-  void processFeedback(const visualization_msgs::InteractiveMarkerFeedbackConstPtr& feedback);
+  void targetFeedback(const visualization_msgs::InteractiveMarkerFeedbackConstPtr& feedback);
 };
 }
-
 #endif

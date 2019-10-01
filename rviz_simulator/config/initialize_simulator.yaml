@@ -1,0 +1,14 @@
+world_frame_id: "ROSWorld"
+
+# target parameters
+num_targets: 5
+target_size: [.1, 0.1, 0.01]
+distance_between_targets: 1.0
+starting_target_position: [0.0, 0.0, 0.0]                   # geometery_msgs::Point
+starting_target_orientation: [-1, 0, 0, 0, 0, 1, 0, 1, 0]   # Eigen::Matrix3d ColMajor
+
+# camera parameters
+camera_intrinsics_file: "photoneo_camera_intrinsics.yaml" 
+starting_camera_position: [0, 3, 0 ]                        # geometery_msgs::Point
+starting_camera_orientation: [-1, 0, 0, 0, 0, -1, 0, -1, 0] # Eigen::Matrix3d ColMajor
+

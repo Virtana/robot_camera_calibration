@@ -34,16 +34,20 @@
 namespace rviz_simulator
 {
 Target::Target(const std::string marker_frame_id, const std::string marker_name,
-               const geometry_msgs::Point marker_position_in_ROSWorld, const std_msgs::ColorRGBA marker_color_RGBA,
-               double marker_scale,
-               boost::shared_ptr<interactive_markers::InteractiveMarkerServer> g_interactive_marker_server)
+               const geometry_msgs::Point marker_position_in_ROSWorld,
+               const geometry_msgs::Quaternion marker_orientation_in_ROSWorld,
+               const std_msgs::ColorRGBA marker_color_RGBA, std::vector<double> target_size,
+               boost::shared_ptr<interactive_markers::InteractiveMarkerServer> g_interactive_marker_server,
+               unsigned int interaction_mode)
 {
   this->marker_frame_id_ = marker_frame_id;
   this->marker_name_ = marker_name;
   this->marker_position_in_ROSWorld_ = marker_position_in_ROSWorld;
+  this->marker_orientation_in_ROSWorld_ = marker_orientation_in_ROSWorld;
   this->marker_color_RGBA_ = marker_color_RGBA;
-  this->marker_scale_ = marker_scale;
+  this->target_size_ = target_size;
   this->g_interactive_marker_server_ = g_interactive_marker_server;
+  this->interaction_mode_ = interaction_mode;
 
   this->make6DofMarker(marker_position_in_ROSWorld);
 }
@@ -58,14 +62,11 @@ visualization_msgs::Marker Target::makeMarkerBox(visualization_msgs::Interactive
 
   marker.type = visualization_msgs::Marker::CUBE;
 
-  marker.scale.x = msg.scale * this->marker_scale_;
-  marker.scale.y = msg.scale * this->marker_scale_;
-  marker.scale.z = msg.scale * this->marker_scale_;
+  marker.scale.x = msg.scale * this->target_size_[0];
+  marker.scale.y = msg.scale * this->target_size_[1];
+  marker.scale.z = msg.scale * this->target_size_[2];
 
-  marker.color.r = this->marker_color_RGBA_.r;
-  marker.color.g = this->marker_color_RGBA_.g;
-  marker.color.b = this->marker_color_RGBA_.b;
-  marker.color.a = this->marker_color_RGBA_.a;
+  marker.color = this->marker_color_RGBA_;
 
   return marker;
 }
@@ -84,15 +85,16 @@ void Target::make6DofMarker(const geometry_msgs::Point& position)
 {
   this->interactive_marker_.header.frame_id = this->marker_frame_id_;
   this->interactive_marker_.pose.position = this->marker_position_in_ROSWorld_;
+  this->interactive_marker_.pose.orientation = this->marker_orientation_in_ROSWorld_;
 
   this->interactive_marker_.scale = 1;
 
   this->interactive_marker_.name = this->marker_name_;
-  this->interactive_marker_.description = "6DOF_MOVE_ROTATE_3D";
+  this->interactive_marker_.description = this->marker_name_;
 
   /// insert box with controls
   this->makeMarkerBoxControl(interactive_marker_);
-  this->interactive_marker_.controls[0].interaction_mode = visualization_msgs::InteractiveMarkerControl::MOVE_ROTATE_3D;
+  this->interactive_marker_.controls[0].interaction_mode = this->interaction_mode_;
   visualization_msgs::InteractiveMarkerControl control;
 
   /// set controls
@@ -130,7 +132,7 @@ void Target::make6DofMarker(const geometry_msgs::Point& position)
   this->interactive_marker_.controls.push_back(control);
 }
 
-void Target::processFeedback(const visualization_msgs::InteractiveMarkerFeedbackConstPtr& feedback)
+void Target::targetFeedback(const visualization_msgs::InteractiveMarkerFeedbackConstPtr& feedback)
 {
   /// logging marker information
   std::ostringstream s;
@@ -164,10 +166,11 @@ void Target::processFeedback(const visualization_msgs::InteractiveMarkerFeedback
   this->g_interactive_marker_server_->applyChanges();
 }
 
-void Target::addInteractiveMarkerToServer()
+void Target::addTargetToServer()
 {
   this->g_interactive_marker_server_->insert(this->interactive_marker_);
   this->g_interactive_marker_server_->setCallback(this->interactive_marker_.name,
-                                                  boost::bind(&rviz_simulator::Target::processFeedback, this, _1));
+                                                  boost::bind(&rviz_simulator::Target::targetFeedback, this, _1));
+  ROS_INFO_STREAM("Target " << this->marker_name_ << " added to server.");
 }
 }
